@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- default: trust system CAs -->
+    <base-config>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- OneSignal API -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">onesignal.com</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Strava API -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">strava.com</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

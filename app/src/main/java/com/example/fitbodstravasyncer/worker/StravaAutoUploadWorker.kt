@@ -1,0 +1,77 @@
+package com.example.fitbodstravasyncer.worker
+
+import android.content.Context
+import android.util.Log
+import androidx.health.connect.client.HealthConnectClient
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import com.example.fitbodstravasyncer.data.db.AppDatabase
+import com.example.fitbodstravasyncer.util.FitbodFetcher
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+class StravaAutoUploadWorker(
+    ctx: Context,
+    params: WorkerParameters
+) : CoroutineWorker(ctx, params) {
+
+    companion object {
+        private const val TAG = "STRAVA-auto"
+        const val WORK_NAME = "auto_strava_upload"
+
+
+        fun schedule(context: Context) {
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                WORK_NAME, // use constant here
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<StravaAutoUploadWorker>(15, TimeUnit.MINUTES)
+                    .build()
+            )
+        }
+
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        }
+    }
+
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        try {
+            val context = applicationContext
+            val db = AppDatabase.getInstance(context)
+            val dao = db.sessionDao()
+
+            val healthClient = HealthConnectClient.getOrCreate(context)
+
+            // Fetch only last 24 hours
+            val nowInstant = Instant.now()
+            val startInstant = nowInstant.minusSeconds(24 * 3600)
+
+            Log.i(TAG, "Fetching Fitbod sessions from $startInstant to $nowInstant")
+
+            val newSessions = FitbodFetcher.fetchFitbodSessions(healthClient, startInstant, nowInstant)
+
+            newSessions.forEach { session ->
+                dao.insert(session)
+            }
+
+            val unsyncedSessions = dao.getAllOnce().filter { it.stravaId == null }
+
+            Log.i(TAG, "Uploading ${unsyncedSessions.size} unsynced sessions to Strava")
+
+            unsyncedSessions.forEach { session ->
+                Log.i(TAG, "Enqueuing upload for session ${session.id}")
+                StravaUploadWorker.enqueue(context, session.id)
+            }
+
+            Result.success()
+        } catch (e: Exception) {
+            Log.e(TAG, "Auto-sync failed", e)
+            Result.retry()
+        }
+    }
+}
