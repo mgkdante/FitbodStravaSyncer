@@ -1,5 +1,7 @@
 import java.util.Properties
 
+val material3Version = "1.4.0-alpha15"
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -64,6 +66,10 @@ android {
         compose = true
         buildConfig = true
     }
+    composeOptions {
+        // align with your Compose Compiler
+        kotlinCompilerExtensionVersion = "1.4.6"
+    }
 }
 
 dependencies {
@@ -75,7 +81,6 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
     implementation(libs.androidx.connect.client)
     implementation(libs.coil)
     implementation(libs.coil.compose)
@@ -107,4 +112,14 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    implementation("androidx.compose.material3:material3:$material3Version")
+    // Window-size classes for responsive layouts
+    implementation("androidx.compose.material3:material3-window-size-class:$material3Version")
+    // Adaptive navigation suite for larger screens (e.g. multi-pane)
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:$material3Version")
+
+
 }
+
+

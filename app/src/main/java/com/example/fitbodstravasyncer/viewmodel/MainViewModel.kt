@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 import androidx.core.content.edit
+import androidx.health.connect.client.HealthConnectClient
+import kotlin.math.log
 
 private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
@@ -83,44 +85,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun fetchSessions(from: LocalDate?, to: LocalDate?) = viewModelScope.launch {
-        Log.d("FETCH-LOG", "Fetch-Log STARTED: from=$from, to=$to")
+        // 1) Turn spinner on
         _uiState.update { it.copy(isFetching = true) }
+
+        // 2) Bail early (and clear spinner) if dates missing
+        if (from == null || to == null) {
+            _uiState.update { it.copy(isFetching = false) }
+            return@launch
+        }
+
         try {
-            if (from == null || to == null) {
-                Log.d("FETCH-LOG", "Dates null, setting isFetching=false and returning")
-                return@launch
-            }
+            // 3) Fetch & save
             val start = from.atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val end = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
-            Log.d("FETCH-LOG", "About to call fetchFitbodSessions()")
+            val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
+
             val sessions = FitbodFetcher.fetchFitbodSessions(
-                androidx.health.connect.client.HealthConnectClient.getOrCreate(getApplication()),
-                start, end
+                HealthConnectClient.getOrCreate(getApplication()), start, end
             )
-            Log.d("FETCH-LOG", "Got ${sessions.size} sessions. Saving to repo...")
-            sessions.forEach { session -> repo.saveSession(session) }
+
+            sessions.forEach { repo.saveSession(it) }
+
+        } catch (e: Exception) {
+        } finally {
+            // 4) Always clear spinner first
+            _uiState.update { it.copy(isFetching = false) }
+        }
+
+        // 5) Then restore Strava IDs in its own coroutine
+        viewModelScope.launch {
             try {
-                Log.d("FETCH-LOG", "Restoring Strava IDs")
                 com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication())
             } catch (restoreEx: Exception) {
-                Log.e("FETCH-LOG", "Error restoring Strava IDs: ${restoreEx.message}", restoreEx)
             }
-            Log.d("FETCH-LOG", "Finished fetchSessions try block")
-        } catch (e: Exception) {
-            Log.e("FETCH-LOG", "Exception! ${e.message}", e)
-        } finally {
-            Log.d("FETCH-LOG", "Setting isFetching = FALSE")
-            _uiState.update { it.copy(isFetching = false) }
         }
     }
 
 
 
 
-
-
     fun restoreStravaIds() = viewModelScope.launch {
-        try { com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication()) } catch (_: Exception) {}
+        try { com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication()) } catch (e: Exception) {
+            Log.i("strava-log", e.toString())
+        }
     }
 
     fun enqueueSyncAll() = viewModelScope.launch {
