@@ -3,6 +3,14 @@
 package com.example.fitbodstravasyncer.ui
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +29,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -80,14 +89,15 @@ fun MainScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(state.sessionMetrics) { session ->
+                items(state.sessionMetrics, key = { it.id }) { session ->
                     SessionCardWithCheckbox(
                         session = session,
                         checked = selectedIds.contains(session.id),
                         onCheckedChange = { checked ->
                             if (checked) selectedIds.add(session.id)
                             else selectedIds.remove(session.id)
-                        }
+                        },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -186,15 +196,21 @@ fun MainScreen(
                     .padding(16.dp)
             ) {
                 // Trash FAB at BottomStart
-                if (selectedIds.isNotEmpty()) {
+                AnimatedVisibility(
+                    visible = selectedIds.isNotEmpty(),
+                    enter = slideInVertically(
+                        initialOffsetY = { fullHeight -> fullHeight }
+                    ) + fadeIn(),
+                    exit = slideOutVertically(
+                        targetOffsetY = { fullHeight -> fullHeight }
+                    ) + fadeOut(),
+                    modifier = Modifier.align(Alignment.BottomStart)
+                ) {
                     FloatingActionButton(
                         onClick = { showDelete = true },
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                         shape = MaterialTheme.shapes.large,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(bottom = 16.dp)
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete Selected")
                     }
@@ -217,12 +233,12 @@ fun MainScreen(
     }
 }
 
-
 @Composable
 fun SessionCardWithCheckbox(
     session: SessionMetrics,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val backgroundGradient = Brush.linearGradient(
         colors = listOf(
@@ -270,10 +286,18 @@ fun SessionCardWithCheckbox(
     val formattedStartTime = startTime?.format(timeFormatter) ?: startTimeStr
     val formattedEndTime = endTime?.format(timeFormatter) ?: endTimeStr
 
+    // Animate the scale of the checkbox
+    val scale by animateFloatAsState(
+        targetValue = if (checked) 1.2f else 1f,
+        animationSpec = tween(durationMillis = 300),
+        label = "checkboxScale"
+    )
+
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+            .animateContentSize(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -349,14 +373,14 @@ fun SessionCardWithCheckbox(
                 }
             }
 
-            // Checkbox positioned at the top end
+            // Animated Checkbox positioned at the top end
             Checkbox(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
-                    .size(24.dp)
+                    .scale(scale)
             )
         }
     }

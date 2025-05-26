@@ -10,7 +10,6 @@ import com.example.fitbodstravasyncer.data.db.SessionRepository
 import com.example.fitbodstravasyncer.feature.schedule.data.DailySyncScheduler
 import com.example.fitbodstravasyncer.util.FitbodFetcher
 import com.example.fitbodstravasyncer.util.StravaPrefs
-import com.example.fitbodstravasyncer.worker.StravaAutoUploadWorker
 import com.example.fitbodstravasyncer.worker.StravaUploadWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +19,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import androidx.core.content.edit
 import androidx.health.connect.client.HealthConnectClient
-import kotlin.math.log
 
 private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
@@ -66,14 +64,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setDateFrom(date: LocalDate?) {
         _uiState.update { it.copy(dateFrom = date) }
     }
+
     fun setDateTo(date: LocalDate?) {
         _uiState.update { it.copy(dateTo = date) }
     }
 
     fun toggleFutureSync(enabled: Boolean) = viewModelScope.launch {
         prefs.edit { putBoolean(KEY_FUTURE, enabled) }
-        if (enabled) StravaAutoUploadWorker.schedule(getApplication())
-        else StravaAutoUploadWorker.cancel(getApplication())
+
+        // Remove this scheduling from ViewModel to avoid scheduling without permission:
+        // if (enabled) StravaAutoUploadWorker.schedule(getApplication())
+        // else StravaAutoUploadWorker.cancel(getApplication())
+
+        // Instead, the scheduling will be handled in MainActivity after permission is granted.
+
         _uiState.update { it.copy(futureSync = enabled) }
     }
 
@@ -85,19 +89,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun fetchSessions(from: LocalDate?, to: LocalDate?) = viewModelScope.launch {
-        // 1) Turn spinner on
         _uiState.update { it.copy(isFetching = true) }
 
-        // 2) Bail early (and clear spinner) if dates missing
         if (from == null || to == null) {
             _uiState.update { it.copy(isFetching = false) }
             return@launch
         }
 
         try {
-            // 3) Fetch & save
             val start = from.atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
+            val end = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
 
             val sessions = FitbodFetcher.fetchFitbodSessions(
                 HealthConnectClient.getOrCreate(getApplication()), start, end
@@ -106,25 +107,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             sessions.forEach { repo.saveSession(it) }
 
         } catch (e: Exception) {
+            Log.e("MainViewModel", "Error fetching sessions", e)
         } finally {
-            // 4) Always clear spinner first
             _uiState.update { it.copy(isFetching = false) }
         }
 
-        // 5) Then restore Strava IDs in its own coroutine
         viewModelScope.launch {
             try {
                 com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication())
-            } catch (restoreEx: Exception) {
-            }
+            } catch (_: Exception) {}
         }
     }
 
-
-
-
     fun restoreStravaIds() = viewModelScope.launch {
-        try { com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication()) } catch (e: Exception) {
+        try {
+            com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication())
+        } catch (e: Exception) {
             Log.i("strava-log", e.toString())
         }
     }
@@ -136,7 +134,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-// Extension to map entity to metrics
 private fun SessionEntity.toMetrics(): SessionMetrics =
     SessionMetrics(
         id = id,
