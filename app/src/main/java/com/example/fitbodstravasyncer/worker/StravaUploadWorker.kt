@@ -1,4 +1,3 @@
-// File: StravaUploadWorker.kt
 package com.example.fitbodstravasyncer.worker
 
 import android.content.Context
@@ -29,7 +28,12 @@ class StravaUploadWorker(
         private const val TAG = "STRAVA-sync"
 
         /** Enqueue a one-shot upload for the given session ID */
-        fun enqueue(context: Context, sessionId: String) {
+        fun enqueue(context: Context, sessionId: String?) {
+            if (sessionId.isNullOrBlank()) {
+                Log.e(TAG, "enqueue: Ignoring blank/null sessionId")
+                Toast.makeText(context, "Invalid session for sync.", Toast.LENGTH_SHORT).show()
+                return
+            }
             if (!context.isStravaConnected()) {
                 Toast.makeText(context, "Connect Strava first", Toast.LENGTH_SHORT).show()
                 return
@@ -38,7 +42,7 @@ class StravaUploadWorker(
 
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "UPLOAD_$sessionId",
-                ExistingWorkPolicy.REPLACE,
+                ExistingWorkPolicy.KEEP, // Use KEEP for robustness against double-tap, prevents race!
                 OneTimeWorkRequestBuilder<StravaUploadWorker>()
                     .setInputData(inputData)
                     .setBackoffCriteria(
@@ -48,17 +52,17 @@ class StravaUploadWorker(
                     )
                     .build()
             )
+            Log.i(TAG, "Enqueued upload for sessionId=$sessionId")
         }
-
-
     }
 
     /* ───────────────────────────── doWork() ───────────────────────────── */
     override suspend fun doWork(): Result {
+        var tcxFile: java.io.File? = null // <-- For cleanup
         try {
             Log.i(TAG, "doWork: started")
 
-            val sessionId = inputData.getString("SESSION_ID") ?: run {
+            val sessionId = inputData.getString("SESSION_ID")?.takeIf { it.isNotBlank() } ?: run {
                 Log.e(TAG, "doWork: SESSION_ID missing!")
                 return Result.failure()
             }
@@ -98,6 +102,7 @@ class StravaUploadWorker(
             val sessionStartEpoch = session.startTime.epochSecond
             val tolerance = 300L // 5 min
 
+            Log.i(TAG, "Fetching recent Strava activities for matching...")
             val recentActivities = api.listActivities(token, 50, 1)
 
             val matchingActivity = recentActivities.firstOrNull { activity ->
@@ -120,7 +125,7 @@ class StravaUploadWorker(
             }
 
             // ------- build TCX (summary only) -------
-            val tcxFile = TcxFileGenerator.generateTcxFile(
+            tcxFile = TcxFileGenerator.generateTcxFile(
                 ctx,
                 session.id,
                 session.title,
@@ -153,6 +158,7 @@ class StravaUploadWorker(
             val uploadId = response.id
 
             Log.i(TAG, "⬆️  uploaded file, got upload_id=$uploadId")
+            Log.i(TAG, "Polling Strava for upload status, upload_id=$uploadId")
 
             // 2️⃣ poll until Strava finishes processing with exponential backoff
             val maxChecks = 60              // 60 × 4 s  ≈ 4 min
@@ -162,8 +168,10 @@ class StravaUploadWorker(
             var status: com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
 
             do {
+                Log.i(TAG, "Polling attempt $checks for upload_id=$uploadId ...")
                 kotlinx.coroutines.delay(delayTime)
                 status = api.getUploadStatus(token, uploadId)
+                Log.i(TAG, "Upload poll #$checks: status=${status.status}, activity_id=${status.activity_id}")
                 delayTime = (delayTime * 2).coerceAtMost(maxDelay)
                 checks++
             } while (status.activity_id == null && checks < maxChecks)
@@ -185,7 +193,11 @@ class StravaUploadWorker(
                 )
                 return Result.success()
             } else {
-                Log.e(TAG, "❌ Strava never returned an activity_id after $checks checks")
+                Log.e(TAG, "❌ Strava never returned an activity_id after $checks checks for upload_id=$uploadId")
+                if (tcxFile.exists()) {
+                    val deleted = tcxFile.delete()
+                    Log.i(TAG, "Deleted TCX file after failed poll: $deleted at ${tcxFile.absolutePath}")
+                }
                 NotificationHelper.showNotification(
                     ctx,
                     "Strava Sync Failed",
@@ -195,17 +207,24 @@ class StravaUploadWorker(
                 return Result.retry()
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            // Strava disconnected or token revoked
+            // Clean up TCX file if cancelled
+            if (tcxFile != null && tcxFile.exists()) {
+                val deleted = tcxFile.delete()
+                Log.i(TAG, "Deleted TCX file on cancellation: $deleted at ${tcxFile.absolutePath}")
+            }
             NotificationHelper.showNotification(
                 ctx,
                 "Strava Disconnected",
                 "Please reconnect your Strava account to continue syncing.",
                 1
             )
-            Log.e(TAG, "doWork: cancelled")
+            Log.e(TAG, "doWork: cancelled", e)
             return Result.failure()
         } catch (e: Exception) {
-            // Generic failure
+            if (tcxFile != null && tcxFile.exists()) {
+                val deleted = tcxFile.delete()
+                Log.i(TAG, "Deleted TCX file on exception: $deleted at ${tcxFile.absolutePath}")
+            }
             NotificationHelper.showNotification(
                 ctx,
                 "Strava Sync Failed",
@@ -216,6 +235,5 @@ class StravaUploadWorker(
             return Result.retry()
         }
     }
-
 
 }

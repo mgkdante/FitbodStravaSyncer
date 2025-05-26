@@ -3,6 +3,7 @@
 package com.example.fitbodstravasyncer.ui
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -11,17 +12,24 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MoreVert
@@ -30,26 +38,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.fitbodstravasyncer.AppThemeMode
 import com.example.fitbodstravasyncer.viewmodel.MainViewModel
 import com.example.fitbodstravasyncer.viewmodel.SessionMetrics
+import com.example.fitbodstravasyncer.worker.StravaUploadWorker
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+
+
+enum class SyncFilter { ALL, NON_SYNCED, SYNCED }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,12 +79,19 @@ fun MainScreen(
     var showDeleteAll by remember { mutableStateOf(false) }
     var isChecking by remember { mutableStateOf(false) }
 
+    var syncFilter by remember { mutableStateOf(SyncFilter.ALL) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Fitbod → Strava") },
                 actions = {
-                    ThemeToggleRow(selectedMode = appThemeMode, onModeSelected = onThemeChange)
+                    FilterAndThemeDropdown(
+                        currentFilter = syncFilter,
+                        onFilterChange = { syncFilter = it },
+                        currentTheme = appThemeMode,
+                        onThemeChange = onThemeChange
+                    )
                 }
             )
         }
@@ -85,20 +101,41 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                modifier = Modifier.fillMaxSize()
             ) {
-                items(state.sessionMetrics, key = { it.id }) { session ->
-                    SessionCardWithCheckbox(
-                        session = session,
-                        checked = selectedIds.contains(session.id),
-                        onCheckedChange = { checked ->
-                            if (checked) selectedIds.add(session.id)
-                            else selectedIds.remove(session.id)
-                        },
-                        modifier = Modifier.animateItem()
-                    )
+                // Filtered list for animation
+                val filteredSessions = when (syncFilter) {
+                    SyncFilter.ALL -> state.sessionMetrics
+                    SyncFilter.NON_SYNCED -> state.sessionMetrics.filter { it.stravaId == null }
+                    SyncFilter.SYNCED -> state.sessionMetrics.filter { it.stravaId != null }
+                }
+
+                // AnimatedContent for smooth cross-fade on filter change
+                AnimatedContent(
+                    targetState = filteredSessions,
+                    transitionSpec = {
+                        fadeIn(tween(180)) togetherWith fadeOut(tween(180))
+                    },
+                    label = "ListAnimation"
+                ) { list ->
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(list, key = { it.id }) { session ->
+                            SessionCardWithCheckbox(
+                                session = session,
+                                checked = selectedIds.contains(session.id),
+                                onCheckedChange = { checked ->
+                                    if (checked) selectedIds.add(session.id)
+                                    else selectedIds.remove(session.id)
+                                },
+                                modifier = Modifier.animateItem()
+                            )
+                        }
+                    }
                 }
             }
 
@@ -160,8 +197,6 @@ fun MainScreen(
                 ) {
                     ActionsSheet(
                         state = state,
-                        selectedIds = selectedIds,
-                        showDelete = { showDelete = true },
                         showDeleteAll = { showDeleteAll = true },
                         onFetch = {
                             coroutineScope.launch {
@@ -189,30 +224,61 @@ fun MainScreen(
                 }
             }
 
-            // Independent Floating Action Buttons
+            // Floating Action Buttons
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                // Trash FAB at BottomStart
-                AnimatedVisibility(
-                    visible = selectedIds.isNotEmpty(),
-                    enter = slideInVertically(
-                        initialOffsetY = { fullHeight -> fullHeight }
-                    ) + fadeIn(),
-                    exit = slideOutVertically(
-                        targetOffsetY = { fullHeight -> fullHeight }
-                    ) + fadeOut(),
-                    modifier = Modifier.align(Alignment.BottomStart)
+                Column(
+                    modifier = Modifier.align(Alignment.BottomStart),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    FloatingActionButton(
-                        onClick = { showDelete = true },
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        shape = MaterialTheme.shapes.large,
+                    // Upload FAB
+                    AnimatedVisibility(
+                        visible = selectedIds.isNotEmpty(),
+                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Selected")
+                        FloatingActionButton(
+                            onClick = {
+                                val selectedSessions = state.sessionMetrics.filter { selectedIds.contains(it.id) }
+                                val alreadySynced = selectedSessions.filter { it.stravaId != null }
+                                val toSync = selectedSessions.filter { it.stravaId == null }
+
+                                if (alreadySynced.isNotEmpty()) {
+                                    Toast.makeText(context, "Already synced", Toast.LENGTH_SHORT).show()
+                                }
+
+                                if (toSync.isNotEmpty()) {
+                                    toSync.forEach { session ->
+                                        StravaUploadWorker.enqueue(context, session.id)
+                                    }
+                                    Toast.makeText(context, "Syncing ${toSync.size} workout(s) to Strava", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shape = MaterialTheme.shapes.large
+                        ) {
+                            Icon(Icons.Default.CloudDone, contentDescription = "Sync Selected")
+                        }
+                    }
+
+                    // Trash FAB
+                    AnimatedVisibility(
+                        visible = selectedIds.isNotEmpty(),
+                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                    ) {
+                        FloatingActionButton(
+                            onClick = { showDelete = true },
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            shape = MaterialTheme.shapes.large
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Selected")
+                        }
                     }
                 }
 
@@ -229,9 +295,12 @@ fun MainScreen(
                     Icon(Icons.Default.MoreVert, contentDescription = "Actions")
                 }
             }
+
+
         }
     }
 }
+
 
 @Composable
 fun SessionCardWithCheckbox(
@@ -249,44 +318,26 @@ fun SessionCardWithCheckbox(
 
     // Preprocess the dateTime string
     val rawDateTime = session.dateTime
-        .replace(".", "") // Remove periods from AM/PM
-        .replace("–", "-") // Replace en dash with hyphen
+        .replace(".", "")
+        .replace("–", "-")
 
-    // Split the dateTime string into start and end parts
     val dateTimeParts = rawDateTime.split(" - ")
     val startPart = dateTimeParts.getOrNull(0) ?: ""
     val endPart = dateTimeParts.getOrNull(1) ?: ""
 
-    // Extract date and time from the start part
     val startDateTimeParts = startPart.split(" ")
     val date = startDateTimeParts.getOrNull(0) ?: ""
     val startTimeStr = startDateTimeParts.drop(1).joinToString(" ")
 
-    // The end part contains only the time
     val endDateTimeParts = endPart.split(" ")
     val endTimeStr = endDateTimeParts.drop(1).joinToString(" ")
 
-    // Define the time formatter
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
-
-    // Parse the start and end times
-    val startTime = try {
-        LocalTime.parse(startTimeStr, timeFormatter)
-    } catch (e: Exception) {
-        null
-    }
-
-    val endTime = try {
-        LocalTime.parse(endTimeStr, timeFormatter)
-    } catch (e: Exception) {
-        null
-    }
-
-    // Format the times for display
+    val startTime = try { LocalTime.parse(startTimeStr, timeFormatter) } catch (e: Exception) { null }
+    val endTime = try { LocalTime.parse(endTimeStr, timeFormatter) } catch (e: Exception) { null }
     val formattedStartTime = startTime?.format(timeFormatter) ?: startTimeStr
     val formattedEndTime = endTime?.format(timeFormatter) ?: endTimeStr
 
-    // Animate the scale of the checkbox
     val scale by animateFloatAsState(
         targetValue = if (checked) 1.2f else 1f,
         animationSpec = tween(durationMillis = 300),
@@ -307,33 +358,62 @@ fun SessionCardWithCheckbox(
                 .background(backgroundGradient)
                 .padding(24.dp)
         ) {
+            // Sync status icon and label at top start
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.align(Alignment.TopStart)
+            ) {
+                if (session.stravaId != null) {
+                    Icon(
+                        imageVector = Icons.Default.CloudDone,
+                        contentDescription = "Synced to Strava",
+                        tint = Color(0xFF43A047),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Synced",
+                        color = Color(0xFF43A047),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = "Not Synced to Strava",
+                        tint = Color(0xFFD32F2F),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Not Synced",
+                        color = Color(0xFFD32F2F),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Title
+                Spacer(Modifier.height(6.dp)) // Space below icon row
+
                 Text(
                     text = session.title,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-
-                // Date
                 Text(
                     text = date,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-
-                // Time Range
                 Text(
                     text = "$formattedStartTime - $formattedEndTime",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-
-                // Description
                 session.description?.takeIf { it.isNotBlank() }?.let { desc ->
                     Text(
                         text = desc,
@@ -341,27 +421,22 @@ fun SessionCardWithCheckbox(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-
-                // Metrics Row
                 Row(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Duration
                     StatColumn(
                         icon = Icons.Default.AccessTime,
                         label = "Duration",
                         value = "${session.activeTime} min",
                         iconTint = MaterialTheme.colorScheme.primary
                     )
-                    // Calories
                     StatColumn(
                         icon = Icons.Default.LocalFireDepartment,
                         label = "Calories",
                         value = "${session.calories.toInt()} kcal",
                         iconTint = MaterialTheme.colorScheme.error
                     )
-                    // Avg Heart Rate
                     session.avgHeartRate?.let {
                         StatColumn(
                             icon = Icons.Default.Favorite,
@@ -373,7 +448,7 @@ fun SessionCardWithCheckbox(
                 }
             }
 
-            // Animated Checkbox positioned at the top end
+            // Animated Checkbox at top end
             Checkbox(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
@@ -387,11 +462,10 @@ fun SessionCardWithCheckbox(
 }
 
 
+
 @Composable
 fun ActionsSheet(
     state: com.example.fitbodstravasyncer.viewmodel.UiState,
-    selectedIds: List<String>,
-    showDelete: () -> Unit,
     showDeleteAll: () -> Unit,
     onFetch: () -> Unit,
     isFetching: Boolean,
@@ -413,6 +487,8 @@ fun ActionsSheet(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Text("Actions", style = MaterialTheme.typography.titleLarge)
+
+        // Date From Picker
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Text("Date From", style = MaterialTheme.typography.labelSmall)
@@ -426,6 +502,8 @@ fun ActionsSheet(
                 Text("Pick")
             }
         }
+
+        // Date To Picker
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Text("Date To", style = MaterialTheme.typography.labelSmall)
@@ -439,71 +517,64 @@ fun ActionsSheet(
                 Text("Pick")
             }
         }
-        Button(
+
+        // Fetch Workouts Button
+        LabeledButtonWithHelp(
+            buttonText = "Fetch Workouts",
             onClick = onFetch,
-            enabled = !isFetching && state.dateFrom != null && state.dateTo != null,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (isFetching) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-                Spacer(Modifier.width(8.dp))
-            }
-            Text("Fetch Workouts")
-        }
+            helpTitle = "Fetch Workouts",
+            helpDescription = "Fetches Fitbod workouts between the selected dates.",
+            isLoading = isFetching,
+            enabled = !isFetching && state.dateFrom != null && state.dateTo != null
+        )
 
-        if (state.sessionMetrics.isNotEmpty()) {
-            OutlinedButton(
-                onClick = showDeleteAll,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Delete All")
-            }
-        }
-        Button(
+
+        // Auto-sync Toggle with Help
+        LabeledSwitchWithHelp(
+            label = "Auto-sync 24h every 15m",
+            checked = state.futureSync,
+            onCheckedChange = onToggleFutureSync,
+            helpTitle = "Auto-sync",
+            helpDescription = "Automatically syncs workouts every 15 minutes for the past 24 hours."
+        )
+
+        // Daily Sync Toggle with Help
+        LabeledSwitchWithHelp(
+            label = "Daily Sync",
+            checked = state.dailySync,
+            onCheckedChange = onToggleDailySync,
+            helpTitle = "Daily Sync",
+            helpDescription = "Performs a daily synchronization of your workouts."
+        )
+
+        // Check Matching Workouts Button with Help
+        LabeledButtonWithHelp(
+            buttonText = "Check matching Strava workouts",
             onClick = onCheckMatching,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Check matching Strava workouts")
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Auto-sync 24h every 15m", style = MaterialTheme.typography.bodyMedium)
-            Switch(
-                checked = state.futureSync,
-                onCheckedChange = onToggleFutureSync
-            )
-        }
+            helpTitle = "Check Matching Workouts",
+            helpDescription = "Checks for workouts that already exist in Strava to avoid duplicates."
+        )
 
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Daily Sync", style = MaterialTheme.typography.bodyMedium)
-            Switch(
-                checked = state.dailySync,
-                onCheckedChange = onToggleDailySync
-            )
-        }
-
-        Button(
+        // Sync All Button with Help
+        LabeledButtonWithHelp(
+            buttonText = "Sync All",
             onClick = onSyncAll,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Sync All")
+            helpTitle = "Sync All",
+            helpDescription = "Synchronizes all workouts to Strava."
+        )
+
+        // Delete All Button with Help
+        if (state.sessionMetrics.isNotEmpty()) {
+            LabeledButtonWithHelp(
+                buttonText = "Delete All",
+                onClick = showDeleteAll,
+                helpTitle = "Delete All",
+                helpDescription = "Deletes all workout sessions from the list."
+            )
         }
     }
 
+    // Date Pickers
     if (showDatePickerFrom) {
         MaterialDatePickerDialog(
             initialDate = state.dateFrom ?: LocalDate.now(),
@@ -526,6 +597,7 @@ fun ActionsSheet(
         )
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -647,5 +719,306 @@ private fun StatColumn(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
         )
+    }
+}
+
+
+@Composable
+fun InfoDialog(
+    title: String,
+    description: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(description) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("OK")
+            }
+        }
+    )
+}
+
+
+@Composable
+fun HelpIconButton(
+    title: String,
+    description: String
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    IconButton(onClick = { showDialog = true }) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = "Help",
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+
+    if (showDialog) {
+        InfoDialog(
+            title = title,
+            description = description,
+            onDismiss = { showDialog = false }
+        )
+    }
+}
+
+
+@Composable
+fun LabeledSwitchWithHelp(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    helpTitle: String,
+    helpDescription: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.width(8.dp))
+            HelpIconButton(title = helpTitle, description = helpDescription)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+fun LabeledButtonWithHelp(
+    buttonText: String,
+    onClick: () -> Unit,
+    helpTitle: String,
+    helpDescription: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isLoading: Boolean = false
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Text(buttonText)
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(onClick = { showDialog = true }) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "Info",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(helpTitle) },
+            text = { Text(helpDescription) },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+}
+
+
+@Composable
+fun FilterAndThemeDropdown(
+    currentFilter: SyncFilter,
+    onFilterChange: (SyncFilter) -> Unit,
+    currentTheme: AppThemeMode,
+    onThemeChange: (AppThemeMode) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            // Filter: All
+            DropdownMenuItem(
+                text = { Text("Filter: All") },
+                onClick = {
+                    onFilterChange(SyncFilter.ALL)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.List,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    if (currentFilter == SyncFilter.ALL) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+
+            // Filter: Non Synced
+            DropdownMenuItem(
+                text = { Text("Filter: Non Synced") },
+                onClick = {
+                    onFilterChange(SyncFilter.NON_SYNCED)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    if (currentFilter == SyncFilter.NON_SYNCED) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+
+            // Filter: Synced
+            DropdownMenuItem(
+                text = { Text("Filter: Synced") },
+                onClick = {
+                    onFilterChange(SyncFilter.SYNCED)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.CloudDone,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    if (currentFilter == SyncFilter.SYNCED) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+
+            HorizontalDivider()
+
+            // Theme: Light
+            DropdownMenuItem(
+                text = { Text("Theme: Light") },
+                onClick = {
+                    onThemeChange(AppThemeMode.LIGHT)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Brightness7,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    if (currentTheme == AppThemeMode.LIGHT) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+
+            // Theme: Dark
+            DropdownMenuItem(
+                text = { Text("Theme: Dark") },
+                onClick = {
+                    onThemeChange(AppThemeMode.DARK)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Brightness4,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    if (currentTheme == AppThemeMode.DARK) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+
+            // Theme: System
+            DropdownMenuItem(
+                text = { Text("Theme: System") },
+                onClick = {
+                    onThemeChange(AppThemeMode.SYSTEM)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    if (currentTheme == AppThemeMode.SYSTEM) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+        }
     }
 }
