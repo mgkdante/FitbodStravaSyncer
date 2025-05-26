@@ -122,6 +122,8 @@ dependencies {
 
     implementation(libs.androidx.browser)
 
+    implementation(libs.androidx.core.splashscreen)
+
 
 }
 

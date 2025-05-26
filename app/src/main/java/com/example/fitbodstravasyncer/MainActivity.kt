@@ -1,5 +1,7 @@
 package com.example.fitbodstravasyncer
 
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.ui.graphics.toArgb
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,7 +10,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -16,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.contracts.HealthPermissionsRequestContract
@@ -34,6 +34,7 @@ import com.example.fitbodstravasyncer.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 enum class AppThemeMode { SYSTEM, LIGHT, DARK }
 
@@ -44,12 +45,19 @@ class MainActivity : ComponentActivity() {
     // Strava OAuth constants
     private val STRAVA_CLIENT_ID     = BuildConfig.STRAVA_CLIENT_ID
     private val STRAVA_CLIENT_SECRET = BuildConfig.STRAVA_CLIENT_SECRET
-    private val STRAVA_REDIRECT_URI  = "yourapp://strava-auth"
+    private val STRAVA_REDIRECT_URI  = "myapp://strava-auth"
     private val STRAVA_AUTH_URL      = "https://www.strava.com/oauth/authorize"
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         healthConnectClient = HealthConnectClient.getOrCreate(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
+            }
+        }
 
         setContent {
             // --- Theme state ---
@@ -68,9 +76,11 @@ class MainActivity : ComponentActivity() {
                 HealthPermission.getReadPermission(HeartRateRecord::class),
                 HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
             )
+
+            var permissionsChecked by remember { mutableStateOf(false) }
             var hasHealthPermissions by remember { mutableStateOf(false) }
-            var isStravaConnected   by remember { mutableStateOf(false) }
-            var refreshKey          by remember { mutableStateOf(0) }
+            val isStravaConnected by viewModel.isStravaConnected.collectAsState()
+            var refreshKey by remember { mutableStateOf(0) }
 
             // --- Health Connect permission launcher ---
             val permissionLauncher = rememberLauncherForActivityResult(
@@ -89,13 +99,12 @@ class MainActivity : ComponentActivity() {
                     ?.getQueryParameter("code")
                     ?.let { code ->
                         lifecycleScope.launch {
-                            exchangeStravaCodeForToken(code)
-                            refreshKey++
+                            viewModel.exchangeStravaCodeForTokenInViewModel(code)
                         }
                     }
             }
 
-            // --- Kick off Strava auth via Custom Tabs through the launcher ---
+            // --- Kick off Strava auth via Custom Tabs ---
             fun launchStravaAuthFlow() {
                 val authUri = STRAVA_AUTH_URL.toUri().buildUpon()
                     .appendQueryParameter("client_id", STRAVA_CLIENT_ID)
@@ -110,38 +119,49 @@ class MainActivity : ComponentActivity() {
                     .setToolbarColor(toolbarColor)
                     .build()
 
-                // use the launcher rather than calling launchUrl directly:
                 stravaAuthLauncher.launch(customTabs.intent.setData(authUri))
             }
 
-            // --- React to state changes ---
-            LaunchedEffect(refreshKey) {
+            // --- Check permissions on first composition ---
+            LaunchedEffect(true) {
                 hasHealthPermissions = healthConnectClient.permissionController
                     .getGrantedPermissions()
                     .containsAll(permissions)
-                isStravaConnected   = applicationContext.isStravaConnected()
+                permissionsChecked = true
+                viewModel.updateStravaConnectionState()
             }
 
             // --- UI scaffold ---
             FitbodStravaSyncerTheme(darkTheme = darkTheme) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    if (!hasHealthPermissions || !isStravaConnected) {
-                        SetupScreen(
-                            hasHealthPermissions       = hasHealthPermissions,
-                            onRequestHealthPermissions = { permissionLauncher.launch(permissions) },
-                            isStravaConnected          = isStravaConnected,
-                            onConnectStrava            = { launchStravaAuthFlow() }
-                        )
+                    if (!permissionsChecked) {
+                        // Show a loading spinner while checking permissions
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
                     } else {
-                        MainScreen(
-                            viewModel     = viewModel,
-                            appThemeMode  = appThemeMode,
-                            onThemeChange = { appThemeMode = it }
-                        )
+                        if (!hasHealthPermissions || !isStravaConnected) {
+                            SetupScreen(
+                                hasHealthPermissions = hasHealthPermissions,
+                                onRequestHealthPermissions = { permissionLauncher.launch(permissions) },
+                                isStravaConnected = isStravaConnected,
+                                onConnectStrava = { launchStravaAuthFlow() }
+                            )
+                        } else {
+                            MainScreen(
+                                viewModel = viewModel,
+                                appThemeMode = appThemeMode,
+                                onThemeChange = { appThemeMode = it }
+                            )
+                        }
                     }
                 }
             }
         }
+
     }
 
     private suspend fun exchangeStravaCodeForToken(code: String) {

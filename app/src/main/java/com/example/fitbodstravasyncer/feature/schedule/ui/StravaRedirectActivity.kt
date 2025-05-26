@@ -17,7 +17,7 @@ class StravaRedirectActivity : ComponentActivity() {
 
     private companion object {
         private const val SCHEME = "myapp"
-        private const val HOST   = "strava-callback"
+        private const val HOST   = "strava-auth"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,10 +68,7 @@ class StravaRedirectActivity : ComponentActivity() {
 
                 startActivity(
                     Intent(this@StravaRedirectActivity, MainActivity::class.java)
-                        .addFlags(
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-                        )
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                         .putExtra("strava_connected", true)
                 )
             }catch (e: Exception) {

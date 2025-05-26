@@ -51,9 +51,13 @@ class StravaAutoUploadWorker(
             val nowInstant = Instant.now()
             val startInstant = nowInstant.minusSeconds(24 * 3600)
 
-            Log.i(TAG, "Fetching Fitbod sessions from $startInstant to $nowInstant")
+            val token = "Bearer ${com.example.fitbodstravasyncer.util.StravaTokenManager.getValidAccessToken(context)}"
+            val stravaApi = com.example.fitbodstravasyncer.core.network.RetrofitProvider.retrofit.create(
+                com.example.fitbodstravasyncer.data.strava.StravaActivityService::class.java
+            )
+            val stravaActivities = stravaApi.listActivities(token, 200, 1)
 
-            val newSessions = FitbodFetcher.fetchFitbodSessions(healthClient, startInstant, nowInstant)
+            val newSessions = FitbodFetcher.fetchFitbodSessions(healthClient, startInstant, nowInstant, stravaActivities)
 
             newSessions.forEach { session ->
                 dao.insert(session)

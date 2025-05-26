@@ -1,5 +1,6 @@
 package com.example.fitbodstravasyncer.viewmodel
 
+import com.example.fitbodstravasyncer.data.db.HeartRateSampleEntity
 import java.time.Instant
 import java.time.LocalDate
 
@@ -12,6 +13,7 @@ data class SessionMetrics(
     val activeTime: Long,
     val calories: Double,
     val avgHeartRate: Double?,
+    val heartRateSeries: List<HeartRateSampleEntity> = emptyList(),
     val stravaId: Long?
 )
 

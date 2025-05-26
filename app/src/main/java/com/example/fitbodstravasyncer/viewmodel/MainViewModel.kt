@@ -6,9 +6,12 @@ import androidx.core.content.edit
 import androidx.health.connect.client.HealthConnectClient
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fitbodstravasyncer.BuildConfig.STRAVA_CLIENT_ID
+import com.example.fitbodstravasyncer.BuildConfig.STRAVA_CLIENT_SECRET
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.db.SessionEntity
 import com.example.fitbodstravasyncer.data.db.SessionRepository
+import com.example.fitbodstravasyncer.data.strava.StravaAuthService
 import com.example.fitbodstravasyncer.feature.schedule.data.DailySyncScheduler
 import com.example.fitbodstravasyncer.util.FitbodFetcher
 import com.example.fitbodstravasyncer.util.StravaPrefs
@@ -42,6 +45,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadSessions() = viewModelScope.launch {
         repo.allSessions().collect { list ->
+            Log.d("ViewModel", "Sessions from DB: " + list.joinToString { "${it.id} -> ${it.heartRateSeries}" })
             _uiState.update { it.copy(sessionMetrics = list.map { it.toMetrics() }) }
         }
     }
@@ -89,8 +93,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val start = from.atStartOfDay(ZoneId.systemDefault()).toInstant()
             val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
+            val healthClient = HealthConnectClient.getOrCreate(getApplication())
+
+            // --- Fetch Strava activities for this window
+            val token = "Bearer ${com.example.fitbodstravasyncer.util.StravaTokenManager.getValidAccessToken(getApplication())}"
+            val stravaApi = com.example.fitbodstravasyncer.core.network.RetrofitProvider.retrofit.create(
+                com.example.fitbodstravasyncer.data.strava.StravaActivityService::class.java
+            )
+            val stravaActivities = stravaApi.listActivities(token, 200, 1)
+            // (Add paging here if your window is large!)
+
+            // --- Fetch Fitbod sessions, matching to Strava activities
             val sessions = FitbodFetcher.fetchFitbodSessions(
-                HealthConnectClient.getOrCreate(getApplication()), start, end
+                healthClient = healthClient,
+                startInstant = start,
+                endInstant = end,
+                stravaActivities = stravaActivities
             )
             sessions.forEach { repo.saveSession(it) }
         } catch (e: Exception) {
@@ -98,12 +116,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } finally {
             _uiState.update { it.copy(isFetching = false) }
         }
-        viewModelScope.launch {
-            try {
-                com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication())
-            } catch (_: Exception) { /* ignore */ }
-        }
     }
+
 
     fun restoreStravaIds() = viewModelScope.launch {
         try {
@@ -118,6 +132,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .filter { it.stravaId == null }
             .forEach { StravaUploadWorker.enqueue(getApplication(), it.id) }
     }
+
+    private val _isStravaConnected = MutableStateFlow(
+        StravaPrefs.securePrefs(application).getString(StravaPrefs.KEY_ACCESS, null) != null
+    )
+    val isStravaConnected: StateFlow<Boolean> = _isStravaConnected
+
+    // Call this after successful token exchange
+    fun updateStravaConnectionState() {
+        val connected = StravaPrefs.securePrefs(getApplication())
+            .getString(StravaPrefs.KEY_ACCESS, null) != null
+        _isStravaConnected.value = connected
+    }
+
+    // Modify your existing exchangeStravaCodeForToken to update state:
+    suspend fun exchangeStravaCodeForTokenInViewModel(code: String) {
+        val resp = StravaAuthService.create()
+            .exchangeCode(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, code)
+        StravaPrefs.securePrefs(getApplication()).edit(commit = true) {
+            putString(StravaPrefs.KEY_ACCESS, resp.accessToken)
+            putString(StravaPrefs.KEY_REFRESH, resp.refreshToken)
+            putLong(StravaPrefs.KEY_EXPIRES, resp.expiresAt ?: 0L)
+        }
+        updateStravaConnectionState()
+    }
 }
 
 private fun SessionEntity.toMetrics(): SessionMetrics =
@@ -129,6 +167,7 @@ private fun SessionEntity.toMetrics(): SessionMetrics =
         startTime     = startTime,
         activeTime    = activeTime,
         calories      = calories,
+        heartRateSeries = heartRateSeries.sortedBy { it.time },
         avgHeartRate  = avgHeartRate?.toDouble(),
         stravaId      = stravaId
     )

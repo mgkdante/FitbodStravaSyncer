@@ -14,5 +14,6 @@ data class SessionEntity(
     val activeTime: Long,      // minutes
     val calories: Double,      // raw; worker rounds down
     val avgHeartRate: Long?, // raw; worker rounds down
+    val heartRateSeries: List<HeartRateSampleEntity> = emptyList(),
     val stravaId: Long? = null // null = not yet uploaded
 )

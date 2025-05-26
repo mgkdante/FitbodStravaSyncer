@@ -2,6 +2,7 @@
 
 package com.example.fitbodstravasyncer.ui
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -13,7 +14,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,13 +41,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.fitbodstravasyncer.AppThemeMode
+import com.example.fitbodstravasyncer.data.db.HeartRateSampleEntity
 import com.example.fitbodstravasyncer.viewmodel.MainViewModel
 import com.example.fitbodstravasyncer.viewmodel.SessionMetrics
 import com.example.fitbodstravasyncer.worker.StravaUploadWorker
@@ -54,7 +65,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-
+import kotlin.math.abs
 
 
 enum class SyncFilter { ALL, NON_SYNCED, SYNCED }
@@ -79,6 +90,8 @@ fun MainScreen(
     var isChecking by remember { mutableStateOf(false) }
 
     var syncFilter by remember { mutableStateOf(SyncFilter.ALL) }
+
+    val expandedStates = remember { mutableStateMapOf<String, Boolean>() }
 
     Scaffold(
         topBar = {
@@ -120,21 +133,39 @@ fun MainScreen(
                     },
                     label = "ListAnimation"
                 ) { list ->
-                    LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        items(list, key = { it.id }) { session ->
-                            SessionCardWithCheckbox(
-                                session = session,
-                                checked = selectedIds.contains(session.id),
-                                onCheckedChange = { checked ->
-                                    if (checked) selectedIds.add(session.id)
-                                    else selectedIds.remove(session.id)
-                                },
-                                modifier = Modifier.animateItem()
+                    if (list.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No activities fetched",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            items(list, key = { it.id }) { session ->
+                                val expanded = expandedStates[session.id] ?: false
+                                SessionCardWithCheckbox(
+                                    session = session,
+                                    checked = selectedIds.contains(session.id),
+                                    expanded = expanded,
+                                    onExpandToggle = { expandedStates[session.id] = !expanded },
+                                    onCheckedChange = { checked ->
+                                        if (checked) selectedIds.add(session.id)
+                                        else selectedIds.remove(session.id)
+                                    },
+                                    modifier = Modifier.animateItem()
+                                )
+                            }
                         }
                     }
                 }
@@ -306,6 +337,8 @@ fun MainScreen(
 @Composable
 fun SessionCardWithCheckbox(
     session: SessionMetrics,
+    expanded: Boolean,
+    onExpandToggle: () -> Unit,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -346,6 +379,7 @@ fun SessionCardWithCheckbox(
     )
 
     Card(
+        onClick = {onExpandToggle()},
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 12.dp)
@@ -360,43 +394,56 @@ fun SessionCardWithCheckbox(
                 .padding(24.dp)
         ) {
             // Sync status icon and label at top start
+            // Sync status icon, label, and checkbox on the same row
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.align(Alignment.TopStart)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
             ) {
-                if (session.stravaId != null) {
-                    Icon(
-                        imageVector = Icons.Default.CloudDone,
-                        contentDescription = "Synced to Strava",
-                        tint = Color(0xFF43A047),
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "Synced",
-                        color = Color(0xFF43A047),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.CloudOff,
-                        contentDescription = "Not Synced to Strava",
-                        tint = Color(0xFFD32F2F),
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "Not Synced",
-                        color = Color(0xFFD32F2F),
-                        style = MaterialTheme.typography.labelMedium
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (session.stravaId != null) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDone,
+                            contentDescription = "Synced to Strava",
+                            tint = Color(0xFF43A047),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Synced",
+                            color = Color(0xFF43A047),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.CloudOff,
+                            contentDescription = "Not Synced to Strava",
+                            tint = Color(0xFFD32F2F),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Not Synced",
+                            color = Color(0xFFD32F2F),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    modifier = Modifier
+                        .scale(scale)
+                )
             }
+
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().padding(top = 40.dp)
             ) {
                 Spacer(Modifier.height(6.dp)) // Space below icon row
 
@@ -417,9 +464,9 @@ fun SessionCardWithCheckbox(
                 )
                 session.description.takeIf { it.isNotBlank() }?.let { desc ->
                     Text(
-                        text = desc,
+                        text = desc.replace("\n", ", "),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
                 Row(
@@ -447,21 +494,217 @@ fun SessionCardWithCheckbox(
                         )
                     }
                 }
+                if (expanded && session.heartRateSeries.isNotEmpty()) {
+                    HeartRateChartInteractive(session.heartRateSeries)
+                }
             }
-
-            // Animated Checkbox at top end
-            Checkbox(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .scale(scale)
-            )
         }
     }
 }
 
+
+@Composable
+fun HeartRateChartInteractive(
+    heartRateSeries: List<HeartRateSampleEntity>
+) {
+    val selectedIndex = remember { mutableStateOf<Int?>(null) }
+
+    if (heartRateSeries.size < 2) {
+        Text("Not enough heart rate data for chart.")
+        return
+    }
+
+    val sortedSeries = remember(heartRateSeries) { heartRateSeries.sortedBy { it.time } }
+
+    val minTime = sortedSeries.first().time.epochSecond
+    val maxTime = sortedSeries.last().time.epochSecond
+    val timeRange = (maxTime - minTime).takeIf { it != 0L } ?: 1L
+
+    val minBpm = sortedSeries.minOf { it.bpm }
+    val maxBpm = sortedSeries.maxOf { it.bpm }
+    val bpmRange = (maxBpm - minBpm).takeIf { it != 0L } ?: 1L
+
+    // Axis style
+    val axisColor = MaterialTheme.colorScheme.outline
+    val labelColor = MaterialTheme.colorScheme.onBackground
+    val chartLineColor = MaterialTheme.colorScheme.primary
+    val pointColor = MaterialTheme.colorScheme.secondary
+    val highlightColor = MaterialTheme.colorScheme.tertiary
+
+    val yAxisLabelWidthDp = 42.dp
+    val xAxisLabelHeightDp = 18.dp
+    val density = LocalDensity.current
+    val yAxisLabelWidthPx = with(density) { yAxisLabelWidthDp.toPx() }
+    val xAxisLabelHeightPx = with(density) { xAxisLabelHeightDp.toPx() }
+
+    // Mutable for gesture scope
+    val pointerModifier = Modifier.pointerInput(sortedSeries) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                val position = event.changes.firstOrNull()?.position
+                if (position != null) {
+                    val chartWidth = size.width - yAxisLabelWidthPx
+                    val xRatio = ((position.x - yAxisLabelWidthPx).coerceIn(0f, chartWidth)) / chartWidth
+                    val tappedTime = minTime + (xRatio * timeRange).toLong()
+                    val idx = sortedSeries.indices.minByOrNull {
+                        abs(sortedSeries[it].time.epochSecond - tappedTime)
+                    }
+                    selectedIndex.value = idx
+                }
+                // Reset tooltip when finger/mouse leaves chart area
+                if (event.changes.all { !it.pressed }) {
+                    // Optionally comment out the next line to keep tooltip on last touched point
+                    // selectedIndex.value = null
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .padding(horizontal = 8.dp)
+            .then(pointerModifier)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val chartLeft = yAxisLabelWidthPx
+            val chartRight = size.width
+            val chartTop = 0f
+            val chartBottom = size.height - xAxisLabelHeightPx
+            val chartHeight = chartBottom - chartTop
+            val chartWidth = chartRight - chartLeft
+
+            // --- Axis/Label Ticks ---
+            val yTicks = 4
+            val xTicks = 4
+            val yStep = bpmRange / yTicks
+            val timeStep = timeRange / xTicks
+            val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+            // --- Draw Y Axis ---
+            for (i in 0..yTicks) {
+                val bpm = minBpm + (i * yStep)
+                val y = chartBottom - (i.toFloat() / yTicks) * chartHeight
+                drawLine(
+                    color = axisColor,
+                    start = Offset(chartLeft - 6f, y),
+                    end = Offset(chartLeft, y),
+                    strokeWidth = 2f
+                )
+                drawLine(
+                    color = axisColor.copy(alpha = 0.15f),
+                    start = Offset(chartLeft, y),
+                    end = Offset(chartRight, y),
+                    strokeWidth = 1f
+                )
+                drawContext.canvas.nativeCanvas.drawText(
+                    bpm.toString(),
+                    6f,
+                    y + 12f,
+                    android.graphics.Paint().apply {
+                        color = labelColor.toArgb()
+                        textSize = 32f
+                        textAlign = android.graphics.Paint.Align.LEFT
+                    }
+                )
+            }
+
+            // --- Draw X Axis ---
+            for (i in 0..xTicks) {
+                val t = minTime + (i * timeStep)
+                val x = chartLeft + (i.toFloat() / xTicks) * chartWidth
+                drawLine(
+                    color = axisColor,
+                    start = Offset(x, chartBottom),
+                    end = Offset(x, chartBottom + 6f),
+                    strokeWidth = 2f
+                )
+                drawLine(
+                    color = axisColor.copy(alpha = 0.13f),
+                    start = Offset(x, chartTop),
+                    end = Offset(x, chartBottom),
+                    strokeWidth = 1f
+                )
+                val label = try {
+                    java.time.Instant.ofEpochSecond(t).atZone(java.time.ZoneId.systemDefault()).toLocalTime().format(timeFormatter)
+                } catch (e: Exception) { "" }
+                drawContext.canvas.nativeCanvas.drawText(
+                    label,
+                    x,
+                    chartBottom + xAxisLabelHeightPx,
+                    android.graphics.Paint().apply {
+                        color = labelColor.toArgb()
+                        textSize = 28f
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
+                )
+            }
+
+            // --- Plot Line ---
+            fun xFor(sample: HeartRateSampleEntity): Float =
+                chartLeft + ((sample.time.epochSecond - minTime).toFloat() / timeRange) * chartWidth
+            fun yFor(sample: HeartRateSampleEntity): Float =
+                chartBottom - ((sample.bpm - minBpm).toFloat() / bpmRange) * chartHeight
+
+            for (i in 1 until sortedSeries.size) {
+                drawLine(
+                    color = chartLineColor,
+                    start = Offset(xFor(sortedSeries[i - 1]), yFor(sortedSeries[i - 1])),
+                    end = Offset(xFor(sortedSeries[i]), yFor(sortedSeries[i])),
+                    strokeWidth = 3f,
+                    cap = StrokeCap.Round
+                )
+            }
+
+            // --- Draw points ---
+            for (i in sortedSeries.indices) {
+                val sample = sortedSeries[i]
+                val selected = selectedIndex.value == i
+                drawCircle(
+                    color = if (selected) highlightColor else pointColor,
+                    center = Offset(xFor(sample), yFor(sample)),
+                    radius = if (selected) 10f else 5f
+                )
+            }
+
+            // --- Highlight/Tooltip ---
+            selectedIndex.value?.let { idx ->
+                val sample = sortedSeries[idx]
+                val x = xFor(sample)
+                val y = yFor(sample)
+                drawLine(
+                    color = highlightColor,
+                    start = Offset(x, chartTop),
+                    end = Offset(x, chartBottom),
+                    strokeWidth = 2f
+                )
+                drawCircle(highlightColor, radius = 12f, center = Offset(x, y))
+            }
+        }
+        // Tooltip UI (below chart)
+        selectedIndex.value?.let { idx ->
+            val sample = sortedSeries[idx]
+            val t = sample.time.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(10.dp)
+            ) {
+                Text(
+                    "${sample.bpm} bpm   ${t.format(DateTimeFormatter.ofPattern("HH:mm"))}",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
 
 
 @Composable
