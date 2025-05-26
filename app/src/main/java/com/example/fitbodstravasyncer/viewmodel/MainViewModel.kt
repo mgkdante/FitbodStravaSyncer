@@ -141,6 +141,7 @@ private fun SessionEntity.toMetrics(): SessionMetrics =
     SessionMetrics(
         id = id,
         title = title,
+        description = description,
         dateTime = dateTime,
         startTime = startTime,
         activeTime = activeTime,

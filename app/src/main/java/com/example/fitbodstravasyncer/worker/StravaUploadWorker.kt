@@ -8,17 +8,12 @@ import androidx.work.*
 import com.example.fitbodstravasyncer.core.network.RetrofitProvider
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.strava.StravaActivityService
-import com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
 import com.example.fitbodstravasyncer.util.TcxFileGenerator
 import androidx.work.workDataOf
-import com.example.fitbodstravasyncer.data.strava.StravaUploadResponse
+import com.example.fitbodstravasyncer.util.NotificationHelper
 import com.example.fitbodstravasyncer.util.StravaTokenManager
 import com.example.fitbodstravasyncer.util.isStravaConnected
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
@@ -60,7 +55,7 @@ class StravaUploadWorker(
 
     /* ───────────────────────────── doWork() ───────────────────────────── */
     override suspend fun doWork(): Result {
-        return try {
+        try {
             Log.i(TAG, "doWork: started")
 
             val sessionId = inputData.getString("SESSION_ID") ?: run {
@@ -76,8 +71,51 @@ class StravaUploadWorker(
             }
             Log.i(TAG, "doWork: loaded session from DB")
 
+            // 🔔 Notify: Upload is starting
+            NotificationHelper.showNotification(
+                ctx,
+                "Syncing to Strava",
+                "Uploading workout: ${session.title}...",
+                2
+            )
+
+            // Local DB sanity check
             if (session.stravaId != null) {
                 Log.i(TAG, "doWork: already uploaded, stravaId=${session.stravaId}")
+                NotificationHelper.showNotification(
+                    ctx,
+                    "Strava Sync Complete",
+                    "Workout already uploaded: ${session.title}",
+                    2
+                )
+                return Result.success()
+            }
+
+            // Remote Strava check
+            val token = "Bearer ${StravaTokenManager.getValidAccessToken(ctx)}"
+            val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
+            val formatter = java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(java.time.ZoneOffset.UTC)
+            val sessionStartEpoch = session.startTime.epochSecond
+            val tolerance = 300L // 5 min
+
+            val recentActivities = api.listActivities(token, 50, 1)
+
+            val matchingActivity = recentActivities.firstOrNull { activity ->
+                activity.startDate?.let {
+                    val actEpoch = java.time.Instant.from(formatter.parse(it)).epochSecond
+                    kotlin.math.abs(actEpoch - sessionStartEpoch) < tolerance
+                } ?: false
+            }
+
+            if (matchingActivity != null) {
+                matchingActivity.id?.let { dao.updateStravaId(session.id, it) }
+                Log.i(TAG, "Activity already exists on Strava (id=${matchingActivity.id}), skipping upload.")
+                NotificationHelper.showNotification(
+                    ctx,
+                    "Strava Sync Complete",
+                    "Workout already uploaded on Strava: ${session.title}",
+                    2
+                )
                 return Result.success()
             }
 
@@ -94,22 +132,15 @@ class StravaUploadWorker(
             )
             Log.i(TAG, "doWork: generated TCX file at ${tcxFile.absolutePath}")
 
-            // ------- hit Strava -------
-            val token = "Bearer ${StravaTokenManager.getValidAccessToken(ctx)}"
-            Log.i(TAG, "doWork: got token")
-
-            val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
-            Log.i(TAG, "doWork: created API")
-
             // 1️⃣ upload
-            val dataType: RequestBody = "tcx".toRequestBody()
-            val sportType: RequestBody = "WeightTraining".toRequestBody()
-            val name: RequestBody = session.title.toRequestBody()
-            val description: RequestBody = session.description.toRequestBody()
+            val dataType: okhttp3.RequestBody = "tcx".toRequestBody()
+            val sportType: okhttp3.RequestBody = "WeightTraining".toRequestBody()
+            val name: okhttp3.RequestBody = session.title.toRequestBody()
+            val description: okhttp3.RequestBody = session.description.toRequestBody()
 
-            val response: StravaUploadResponse = api.uploadActivity(
+            val response: com.example.fitbodstravasyncer.data.strava.StravaUploadResponse = api.uploadActivity(
                 token,
-                MultipartBody.Part.createFormData(
+                okhttp3.MultipartBody.Part.createFormData(
                     "file",
                     "${session.id}.tcx",
                     tcxFile.asRequestBody("application/xml".toMediaType())
@@ -123,15 +154,17 @@ class StravaUploadWorker(
 
             Log.i(TAG, "⬆️  uploaded file, got upload_id=$uploadId")
 
-            // 2️⃣ poll until Strava finishes processing
+            // 2️⃣ poll until Strava finishes processing with exponential backoff
             val maxChecks = 60              // 60 × 4 s  ≈ 4 min
             var checks = 0
-            var status: StravaUploadStatusResponse
+            var delayTime = 4000L // Start with 4 seconds
+            val maxDelay = 60000L // Cap delay at 60 seconds
+            var status: com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
 
             do {
-                delay(4000)
+                kotlinx.coroutines.delay(delayTime)
                 status = api.getUploadStatus(token, uploadId)
-                Log.d(TAG, "poll … ${status.status}")
+                delayTime = (delayTime * 2).coerceAtMost(maxDelay)
                 checks++
             } while (status.activity_id == null && checks < maxChecks)
 
@@ -144,18 +177,45 @@ class StravaUploadWorker(
                     Log.i(TAG, "Deleted TCX file: $deleted at ${tcxFile.absolutePath}")
                 }
 
-                Result.success()
+                NotificationHelper.showNotification(
+                    ctx,
+                    "Strava Sync Complete",
+                    "Workout uploaded: ${session.title}",
+                    2
+                )
+                return Result.success()
             } else {
                 Log.e(TAG, "❌ Strava never returned an activity_id after $checks checks")
-                Result.retry()
+                NotificationHelper.showNotification(
+                    ctx,
+                    "Strava Sync Failed",
+                    "Failed to upload workout: ${session.title}. Will retry.",
+                    2
+                )
+                return Result.retry()
             }
-        } catch (_: CancellationException) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Strava disconnected or token revoked
+            NotificationHelper.showNotification(
+                ctx,
+                "Strava Disconnected",
+                "Please reconnect your Strava account to continue syncing.",
+                1
+            )
             Log.e(TAG, "doWork: cancelled")
-            Result.failure()
+            return Result.failure()
         } catch (e: Exception) {
+            // Generic failure
+            NotificationHelper.showNotification(
+                ctx,
+                "Strava Sync Failed",
+                "Failed to upload workout. Will retry.",
+                2
+            )
             Log.e(TAG, "Upload failure", e)
-            Result.retry()
+            return Result.retry()
         }
     }
-}
 
+
+}

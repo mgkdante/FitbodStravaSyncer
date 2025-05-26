@@ -6,6 +6,7 @@ import java.time.LocalDate
 data class SessionMetrics(
     val id: String,
     val title: String,
+    val description: String,
     val dateTime: String,
     val startTime: Instant,
     val activeTime: Long,

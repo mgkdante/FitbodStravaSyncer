@@ -118,7 +118,7 @@ dependencies {
     implementation("androidx.compose.material3:material3-window-size-class:$material3Version")
     // Adaptive navigation suite for larger screens (e.g. multi-pane)
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite:$material3Version")
-
+    implementation("androidx.compose.material:material-icons-extended:1.7.7")
 
 }
 
