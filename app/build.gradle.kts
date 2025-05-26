@@ -73,7 +73,7 @@ android {
 }
 
 dependencies {
-    implementation("com.squareup.moshi:moshi-kotlin:1.15.0")
+    implementation(libs.moshi.kotlin.v1150)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -113,11 +113,11 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    implementation("androidx.compose.material3:material3:$material3Version")
+    implementation(libs.androidx.material3)
     // Window-size classes for responsive layouts
     implementation("androidx.compose.material3:material3-window-size-class:$material3Version")
     // Adaptive navigation suite for larger screens (e.g. multi-pane)
-    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:$material3Version")
+    implementation(libs.androidx.material3.adaptive.navigation.suite)
     implementation("androidx.compose.material:material-icons-extended:1.7.7")
 
     implementation(libs.androidx.browser)

@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.AEADBadTagException
 

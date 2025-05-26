@@ -415,7 +415,7 @@ fun SessionCardWithCheckbox(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-                session.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                session.description.takeIf { it.isNotBlank() }?.let { desc ->
                     Text(
                         text = desc,
                         style = MaterialTheme.typography.bodySmall,
@@ -635,38 +635,6 @@ fun MaterialDatePickerDialog(
         }
     ) {
         DatePicker(state = datePickerState)
-    }
-}
-
-
-@Composable
-fun ThemeToggleRow(
-    selectedMode: AppThemeMode,
-    onModeSelected: (AppThemeMode) -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.padding(end = 8.dp)
-    ) {
-        SegmentedButton(
-            icon = Icons.Default.Brightness7,
-            label = "Light",
-            selected = selectedMode == AppThemeMode.LIGHT,
-            onClick = { onModeSelected(AppThemeMode.LIGHT) }
-        )
-        SegmentedButton(
-            icon = Icons.Default.Brightness4,
-            label = "Dark",
-            selected = selectedMode == AppThemeMode.DARK,
-            onClick = { onModeSelected(AppThemeMode.DARK) }
-        )
-        SegmentedButton(
-            icon = Icons.Default.Settings,
-            label = "System",
-            selected = selectedMode == AppThemeMode.SYSTEM,
-            onClick = { onModeSelected(AppThemeMode.SYSTEM) }
-        )
     }
 }
 
