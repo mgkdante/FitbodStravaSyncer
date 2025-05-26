@@ -23,6 +23,8 @@ data class UiState(
     val stravaConnected: Boolean = false,
     val dateFrom: LocalDate? = null,
     val dateTo: LocalDate? = null,
-    val isFetching: Boolean = false
+    val isFetching: Boolean = false,
+    val dynamicColor: Boolean = true
+
 )
 

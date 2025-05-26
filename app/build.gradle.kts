@@ -120,6 +120,9 @@ dependencies {
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite:$material3Version")
     implementation("androidx.compose.material:material-icons-extended:1.7.7")
 
+    implementation(libs.androidx.browser)
+
+
 }
 
 

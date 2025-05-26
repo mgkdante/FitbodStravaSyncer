@@ -2,13 +2,9 @@ package com.example.fitbodstravasyncer.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.*
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.Typography
-import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -21,33 +17,47 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MotionScheme
 
-// 1) Define your core colors
-private val Purple40     = Color(0xFF6650A4)
-private val PurpleGrey40 = Color(0xFF625B71)
-private val Pink40       = Color(0xFF7D5260)
+// Strava orange & Fitbod red
+private val StravaOrange = Color(0xFFFC4C02)
+private val FitbodRed     = Color(0xFFD32F2F)
 
-private val Purple80     = Color(0xFFD0BCFF)
-private val PurpleGrey80 = Color(0xFFCCC2DC)
-private val Pink80       = Color(0xFFEFB8C8)
+// Blend utility
+private fun blend(a: Color, b: Color, ratio: Float = 0.5f) = Color(
+    red   = a.red   * ratio + b.red   * (1 - ratio),
+    green = a.green * ratio + b.green * (1 - ratio),
+    blue  = a.blue  * ratio + b.blue  * (1 - ratio),
+    alpha = 1f
+)
 
 // 2) Tonal palettes for light/dark
 private val LightTonalScheme = lightColorScheme(
-    primary       = Purple40,
+    primary       = blend(StravaOrange, FitbodRed, 0.5f),  // 50/50
     onPrimary     = Color.White,
-    secondary     = PurpleGrey40,
+    secondary     = StravaOrange,
     onSecondary   = Color.White,
-    tertiary      = Pink40,
+    tertiary      = FitbodRed,
     onTertiary    = Color.White,
-    // add more roles if you like: background, surface, error, etc.
+    background    = Color(0xFFFDFDFD),
+    onBackground  = Color.Black,
+    surface       = Color.White,
+    onSurface     = Color.Black,
+    error         = Color(0xFFB00020),
+    onError       = Color.White
 )
 
 private val DarkTonalScheme = darkColorScheme(
-    primary       = Purple80,
+    primary       = blend(StravaOrange, FitbodRed, 0.4f).copy(alpha = 0.9f), // slightly darker
     onPrimary     = Color.Black,
-    secondary     = PurpleGrey80,
+    secondary     = StravaOrange.copy(alpha = 0.9f),
     onSecondary   = Color.Black,
-    tertiary      = Pink80,
+    tertiary      = FitbodRed.copy(alpha = 0.9f),
     onTertiary    = Color.Black,
+    background    = Color(0xFF121212),
+    onBackground  = Color.White,
+    surface       = Color(0xFF1E1E1E),
+    onSurface     = Color.White,
+    error         = Color(0xFFCF6679),
+    onError       = Color.Black
 )
 
 // 3) Expressive shapes
@@ -85,7 +95,6 @@ private val ExpressiveTypography = Typography(
         fontSize = 11.sp,
         lineHeight = 16.sp
     )
-    // override any others as desired
 )
 
 // 5) The Theme function
@@ -107,10 +116,10 @@ fun FitbodStravaSyncerTheme(
     }
 
     MaterialExpressiveTheme(
-        colorScheme = colorScheme,
+        colorScheme  = colorScheme,
         typography   = ExpressiveTypography,
         shapes       = ExpressiveShapes,
-        motionScheme = MotionScheme.expressive(),  // playful, spring-based motion
+        motionScheme = MotionScheme.expressive(),
     ) {
         content()
     }

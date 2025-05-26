@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
@@ -90,7 +89,9 @@ fun MainScreen(
                         currentFilter = syncFilter,
                         onFilterChange = { syncFilter = it },
                         currentTheme = appThemeMode,
-                        onThemeChange = onThemeChange
+                        onThemeChange = onThemeChange,
+                        dynamicColorEnabled     = state.dynamicColor,
+                        onDynamicColorToggled   = viewModel::toggleDynamicColor
                     )
                 }
             )
@@ -861,7 +862,9 @@ fun FilterAndThemeDropdown(
     currentFilter: SyncFilter,
     onFilterChange: (SyncFilter) -> Unit,
     currentTheme: AppThemeMode,
-    onThemeChange: (AppThemeMode) -> Unit
+    onThemeChange: (AppThemeMode) -> Unit,
+    dynamicColorEnabled: Boolean,
+    onDynamicColorToggled: (Boolean) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -874,151 +877,112 @@ fun FilterAndThemeDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            // Filter: All
+            // — Filters —
             DropdownMenuItem(
                 text = { Text("Filter: All") },
                 onClick = {
                     onFilterChange(SyncFilter.ALL)
                     expanded = false
                 },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.List,
-                        contentDescription = null
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.List, contentDescription = null) },
                 trailingIcon = {
                     if (currentFilter == SyncFilter.ALL) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
-
-            // Filter: Non Synced
             DropdownMenuItem(
                 text = { Text("Filter: Non Synced") },
                 onClick = {
                     onFilterChange(SyncFilter.NON_SYNCED)
                     expanded = false
                 },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.CloudOff,
-                        contentDescription = null
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.CloudOff, contentDescription = null) },
                 trailingIcon = {
                     if (currentFilter == SyncFilter.NON_SYNCED) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
-
-            // Filter: Synced
             DropdownMenuItem(
                 text = { Text("Filter: Synced") },
                 onClick = {
                     onFilterChange(SyncFilter.SYNCED)
                     expanded = false
                 },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.CloudDone,
-                        contentDescription = null
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.CloudDone, contentDescription = null) },
                 trailingIcon = {
                     if (currentFilter == SyncFilter.SYNCED) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
 
             HorizontalDivider()
 
-            // Theme: Light
+            // — Theme Modes —
             DropdownMenuItem(
                 text = { Text("Theme: Light") },
                 onClick = {
                     onThemeChange(AppThemeMode.LIGHT)
                     expanded = false
                 },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Brightness7,
-                        contentDescription = null
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.Brightness7, contentDescription = null) },
                 trailingIcon = {
                     if (currentTheme == AppThemeMode.LIGHT) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
-
-            // Theme: Dark
             DropdownMenuItem(
                 text = { Text("Theme: Dark") },
                 onClick = {
                     onThemeChange(AppThemeMode.DARK)
                     expanded = false
                 },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Brightness4,
-                        contentDescription = null
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.Brightness4, contentDescription = null) },
                 trailingIcon = {
                     if (currentTheme == AppThemeMode.DARK) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
-
-            // Theme: System
             DropdownMenuItem(
                 text = { Text("Theme: System") },
                 onClick = {
                     onThemeChange(AppThemeMode.SYSTEM)
                     expanded = false
                 },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = null
-                    )
-                },
+                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                 trailingIcon = {
                     if (currentTheme == AppThemeMode.SYSTEM) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
+            )
+
+            HorizontalDivider()
+
+            // — Dynamic Color Toggle —
+            DropdownMenuItem(
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Use Dynamic Color")
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = dynamicColorEnabled,
+                            onCheckedChange = {
+                                onDynamicColorToggled(it)
+                            }
+                        )
+                    }
+                },
+                onClick = { /* handled by the Switch above */ }
             )
         }
     }
 }
+
