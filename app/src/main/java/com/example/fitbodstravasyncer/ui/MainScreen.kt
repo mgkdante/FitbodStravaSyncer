@@ -234,13 +234,21 @@ fun MainScreen(
                             showSheet = false
                         },
                         isFetching = state.isFetching,
+                        isChecking = isChecking,
                         onCheckMatching = {
-                            isChecking = true
-                            viewModel.restoreStravaIds()
-                            viewModel.unsyncIfStravaDeleted()
-                            Toast.makeText(context, "Matching Strava workouts checked.", Toast.LENGTH_SHORT).show()
-                            isChecking = false
-                            showSheet = false
+                            if (!isChecking) {
+                                isChecking = true
+                                coroutineScope.launch {
+                                    try {
+                                        viewModel.restoreStravaIds()
+                                        viewModel.unsyncIfStravaDeleted()
+                                        Toast.makeText(context, "Matching Strava workouts checked.", Toast.LENGTH_SHORT).show()
+                                    } finally {
+                                        isChecking = false
+                                        showSheet = false
+                                    }
+                                }
+                            }
                         },
                         onToggleFutureSync = viewModel::toggleFutureSync,
                         onToggleDailySync = viewModel::toggleDailySync,
@@ -249,8 +257,10 @@ fun MainScreen(
                             showSheet = false
                         },
                         onDateFromChange = viewModel::setDateFrom,
-                        onDateToChange = viewModel::setDateTo,
+                        onDateToChange = viewModel::setDateTo
                     )
+
+
                 }
             }
 
@@ -706,6 +716,7 @@ fun ActionsSheet(
     showDeleteAll: () -> Unit,
     onFetch: () -> Unit,
     isFetching: Boolean,
+    isChecking: Boolean,
     onCheckMatching: () -> Unit,
     onToggleFutureSync: (Boolean) -> Unit,
     onToggleDailySync: (Boolean) -> Unit,
@@ -789,8 +800,10 @@ fun ActionsSheet(
             buttonText = "Check matching Strava workouts",
             onClick = onCheckMatching,
             helpTitle = "Check Matching Workouts",
-            helpDescription = "Checks for workouts that already exist in Strava to avoid duplicates."
+            helpDescription = "Checks for workouts that already exist in Strava to avoid duplicates.",
+            enabled = !isChecking // <--- Add this
         )
+
 
         // Sync All Button with Help
         LabeledButtonWithHelp(

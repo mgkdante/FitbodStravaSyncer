@@ -3,8 +3,11 @@ package com.example.fitbodstravasyncer.worker
 import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -30,8 +33,15 @@ class StravaAutoUploadWorker(
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME, // use constant here
                 ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<StravaAutoUploadWorker>(15, TimeUnit.MINUTES)
+                PeriodicWorkRequestBuilder<StravaAutoUploadWorker>(1, TimeUnit.HOURS)
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 5, TimeUnit.MINUTES)
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build()
+                    )
                     .build()
+
             )
         }
 

@@ -24,8 +24,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import kotlin.math.abs
 
 private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
@@ -174,10 +178,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun enqueueSyncAll() = viewModelScope.launch {
+        val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
+        val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
+        val recentActivities = api.listActivities(token, 200, 1) // Fetch ONCE!
+
         _uiState.value.sessionMetrics
             .filter { it.stravaId == null }
-            .forEach { StravaUploadWorker.enqueue(getApplication(), it.id) }
+            .forEach { session ->
+                // Try to match locally first
+                val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
+                val sessionStartEpoch = session.startTime.epochSecond
+                val tolerance = 300L // 5 min
+                val matching = recentActivities.firstOrNull { activity ->
+                    activity.startDate?.let {
+                        val actEpoch = Instant.from(formatter.parse(it)).epochSecond
+                        abs(actEpoch - sessionStartEpoch) < tolerance
+                    } == true
+                }
+                if (matching != null) {
+                    AppDatabase.getInstance(getApplication()).sessionDao()
+                        .updateStravaId(session.id, matching.id)
+                } else {
+                    StravaUploadWorker.enqueue(getApplication(), session.id)
+                }
+            }
     }
+
 
     private val _isStravaConnected = MutableStateFlow(
         StravaPrefs.securePrefs(application).getString(StravaPrefs.KEY_ACCESS, null) != null
