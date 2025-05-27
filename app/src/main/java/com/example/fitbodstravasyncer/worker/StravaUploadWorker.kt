@@ -7,15 +7,26 @@ import androidx.work.*
 import com.example.fitbodstravasyncer.core.network.RetrofitProvider
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.strava.StravaActivityService
-import com.example.fitbodstravasyncer.util.TcxFileGenerator
-import androidx.work.workDataOf
+import com.example.fitbodstravasyncer.data.strava.StravaApiClient
+import com.example.fitbodstravasyncer.data.strava.StravaUploadResponse
+import com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
 import com.example.fitbodstravasyncer.util.NotificationHelper
 import com.example.fitbodstravasyncer.util.StravaTokenManager
+import com.example.fitbodstravasyncer.util.TcxFileGenerator
 import com.example.fitbodstravasyncer.util.isStravaConnected
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 class StravaUploadWorker(
     ctx: Context,
@@ -27,7 +38,6 @@ class StravaUploadWorker(
     companion object {
         private const val TAG = "STRAVA-sync"
 
-        /** Enqueue a one-shot upload for the given session ID */
         fun enqueue(context: Context, sessionId: String?) {
             if (sessionId.isNullOrBlank()) {
                 Toast.makeText(context, "Invalid session for sync.", Toast.LENGTH_SHORT).show()
@@ -38,84 +48,77 @@ class StravaUploadWorker(
                 return
             }
             val inputData = workDataOf("SESSION_ID" to sessionId)
-
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "UPLOAD_$sessionId",
-                ExistingWorkPolicy.KEEP, // Use KEEP for robustness against double-tap, prevents race!
+                ExistingWorkPolicy.KEEP,
                 OneTimeWorkRequestBuilder<StravaUploadWorker>()
                     .setInputData(inputData)
-                    .setBackoffCriteria(
-                        BackoffPolicy.EXPONENTIAL,
-                        30,
-                        TimeUnit.SECONDS
-                    )
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                     .build()
             )
         }
     }
 
-    /* ───────────────────────────── doWork() ───────────────────────────── */
-    override suspend fun doWork(): Result {
-        var tcxFile: java.io.File? = null // <-- For cleanup
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        var tcxFile: File? = null
         try {
-            val sessionId = inputData.getString("SESSION_ID")?.takeIf { it.isNotBlank() } ?: run {
-                Log.e(TAG, "doWork: SESSION_ID missing!")
-                return Result.failure()
+            val sessionId = inputData.getString("SESSION_ID")?.takeIf { it.isNotBlank() }
+                ?: run {
+                    Log.e(TAG, "doWork: SESSION_ID missing!")
+                    return@withContext Result.failure()
+                }
+
+            val dao     = AppDatabase.getInstance(ctx).sessionDao()
+            val session = dao.getById(sessionId) ?: run {
+                Log.e(TAG, "doWork: session not found for id=$sessionId")
+                return@withContext Result.failure()
             }
 
-            val dao = AppDatabase.getInstance(ctx).sessionDao()
-            val session = dao.getById(sessionId) ?: run {
-                Log.e(TAG, "doWork: session not found in DB for id=$sessionId")
-                return Result.failure()
-            }
             val notificationId = session.id.hashCode()
-            // 🔔 Notify: Upload is starting
             NotificationHelper.showNotification(
                 ctx,
                 "Syncing to Strava",
-                "Uploading workout: ${session.title}...",
+                "Uploading workout: ${session.title}…",
                 notificationId
             )
 
-            // Local DB sanity check
+            // Already locally marked?
             if (session.stravaId != null) {
                 NotificationHelper.showNotification(
-                    ctx,
-                    "Strava Sync Complete",
+                    ctx, "Strava Sync Complete",
                     "Workout already uploaded: ${session.title}",
                     notificationId
                 )
-                return Result.success()
+                return@withContext Result.success()
             }
 
-            // Remote Strava check
-            val token = "Bearer ${StravaTokenManager.getValidAccessToken(ctx)}"
-            val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
-            val formatter = java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(java.time.ZoneOffset.UTC)
-            val sessionStartEpoch = session.startTime.epochSecond
-            val tolerance = 300L // 5 min
+            // ——————————————————————————————————————————
+            // 👇 **NEW**: DRY remote-check via full paging
+            val client           = StravaApiClient(ctx)
+            val recentActivities = client.listAllActivities(perPage = 200)
+            val formatter        = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
+            val sessionEpoch     = session.startTime.epochSecond
+            val tolerance        = 300L // 5 min
 
-            val recentActivities = api.listActivities(token, 50, 1)
-
-            val matchingActivity = recentActivities.firstOrNull { activity ->
+            val matching = recentActivities.firstOrNull { activity ->
                 activity.startDate?.let {
-                    val actEpoch = java.time.Instant.from(formatter.parse(it)).epochSecond
-                    kotlin.math.abs(actEpoch - sessionStartEpoch) < tolerance
+                    val actEpoch = Instant.from(formatter.parse(it)).epochSecond
+                    abs(actEpoch - sessionEpoch) < tolerance
                 } == true
             }
 
-            if (matchingActivity != null) {
-                matchingActivity.id?.let { dao.updateStravaId(session.id, it) }
+            if (matching != null) {
+                matching.id?.let { dao.updateStravaId(session.id, it) }
                 NotificationHelper.showNotification(
-                    ctx,
-                    "Strava Sync Complete",
-                    "Workout already uploaded on Strava: ${session.title}",
+                    ctx, "Strava Sync Complete",
+                    "Workout already on Strava: ${session.title}",
                     notificationId
                 )
-                return Result.success()
+                return@withContext Result.success()
             }
+            // ——————————————————————————————————————————
 
-            // ------- build TCX (summary only) -------
+            // build & upload TCX…
             tcxFile = TcxFileGenerator.generateTcxFile(
                 ctx,
                 session.id,
@@ -127,90 +130,70 @@ class StravaUploadWorker(
                 session.avgHeartRate?.toFloat(),
                 session.heartRateSeries
             )
-            // 1️⃣ upload
-            val dataType: okhttp3.RequestBody = "tcx".toRequestBody()
-            val sportType: okhttp3.RequestBody = "WeightTraining".toRequestBody()
-            val name: okhttp3.RequestBody = session.title.toRequestBody()
-            val description: okhttp3.RequestBody = session.description.toRequestBody()
 
-            val response: com.example.fitbodstravasyncer.data.strava.StravaUploadResponse = api.uploadActivity(
+            val token = "Bearer ${StravaTokenManager.getValidAccessToken(ctx)}"
+            val api   = RetrofitProvider.createApiService(StravaActivityService::class.java)
+
+            val response: StravaUploadResponse = api.uploadActivity(
                 token,
-                okhttp3.MultipartBody.Part.createFormData(
+                MultipartBody.Part.createFormData(
                     "file",
                     "${session.id}.tcx",
                     tcxFile.asRequestBody("application/xml".toMediaType())
                 ),
-                dataType,
-                sportType,
-                name,
-                description
+                "tcx".toRequestBody(),
+                "WeightTraining".toRequestBody(),
+                session.title.toRequestBody(),
+                session.description.toRequestBody()
             )
-            val uploadId = response.id
 
-            // 2️⃣ poll until Strava finishes processing with exponential backoff
-            val maxChecks = 60              // 60 × 4 s  ≈ 4 min
-            var checks = 0
-            var delayTime = 4000L // Start with 4 seconds
-            val maxDelay = 60000L // Cap delay at 60 seconds
-            var status: com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
+            // poll status…
+            var delayMs = 4_000L
+            var checks  = 0
+            val maxChecks = 60
+            var status: StravaUploadStatusResponse
 
             do {
-                kotlinx.coroutines.delay(delayTime)
-                status = api.getUploadStatus(token, uploadId)
-                delayTime = (delayTime * 2).coerceAtMost(maxDelay)
+                delay(delayMs)
+                status = api.getUploadStatus(token, response.id)
+                delayMs = (delayMs * 2).coerceAtMost(60_000L)
                 checks++
             } while (status.activity_id == null && checks < maxChecks)
 
             if (status.activity_id != null) {
                 dao.updateStravaId(sessionId, status.activity_id)
-
-                if (tcxFile.exists()) {
-                    val deleted = tcxFile.delete()
-                }
-
+                tcxFile.delete()
                 NotificationHelper.showNotification(
-                    ctx,
-                    "Strava Sync Complete",
+                    ctx, "Strava Sync Complete",
                     "Workout uploaded: ${session.title}",
                     notificationId
                 )
-                return Result.success()
+                Result.success()
             } else {
-                if (tcxFile.exists()) {
-                    val deleted = tcxFile.delete()
-                }
+                tcxFile.delete()
                 NotificationHelper.showNotification(
-                    ctx,
-                    "Strava Sync Failed",
+                    ctx, "Strava Sync Failed",
                     "Failed to upload workout: ${session.title}. Will retry.",
                     2
                 )
-                return Result.retry()
+                Result.retry()
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            // Clean up TCX file if cancelled
-            if (tcxFile != null && tcxFile.exists()) {
-                val deleted = tcxFile.delete()
-            }
+            tcxFile?.delete()
             NotificationHelper.showNotification(
-                ctx,
-                "Strava Disconnected",
+                ctx, "Strava Disconnected",
                 "Please reconnect your Strava account to continue syncing.",
                 1
             )
-            return Result.failure()
+            Result.failure()
         } catch (e: Exception) {
-            if (tcxFile != null && tcxFile.exists()) {
-                val deleted = tcxFile.delete()
-            }
+            tcxFile?.delete()
             NotificationHelper.showNotification(
-                ctx,
-                "Strava Sync Failed",
+                ctx, "Strava Sync Failed",
                 "Failed to upload workout. Will retry.",
                 2
             )
-            return Result.retry()
+            Result.retry()
         }
     }
-
 }

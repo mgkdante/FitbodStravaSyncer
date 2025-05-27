@@ -25,16 +25,35 @@ object RetrofitProvider {
         })
         .addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            // Cache GET requests for 3 minutes
             response.newBuilder()
-                .header("Cache-Control", "public, max-age=900")
+                .header("Cache-Control", "public, max-age=900") // 3 min
                 .build()
         }
         .build()
 
-    val retrofit: Retrofit = Retrofit.Builder()
+    // for all /api/v3/ endpoints (activities, uploads…)
+    private val apiRetrofit: Retrofit = Retrofit.Builder()
         .baseUrl(BASE_URL)
         .client(client)
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
+
+    // for OAuth endpoints (/oauth/token)
+    private val authRetrofit: Retrofit = Retrofit.Builder()
+        .baseUrl("https://www.strava.com/")
+        .client(client)
+        .addConverterFactory(MoshiConverterFactory.create(moshi))
+        .build()
+
+    /**
+     * Use for API v3 calls (StravaActivityService, etc).
+     */
+    fun <T> createApiService(clazz: Class<T>): T =
+        apiRetrofit.create(clazz)
+
+    /**
+     * Use for authentication (/oauth/token).
+     */
+    fun <T> createAuthService(clazz: Class<T>): T =
+        authRetrofit.create(clazz)
 }

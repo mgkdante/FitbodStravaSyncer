@@ -13,6 +13,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
+import com.example.fitbodstravasyncer.data.strava.StravaApiClient
 import com.example.fitbodstravasyncer.util.NotificationHelper
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -53,29 +54,19 @@ class StravaAutoUploadWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val context = applicationContext
-            val db = AppDatabase.getInstance(context)
-            val dao = db.sessionDao()
-
+            val dao = AppDatabase.getInstance(context).sessionDao()
             val healthClient = HealthConnectClient.getOrCreate(context)
-
-            // Fetch only last 24 hours
             val nowInstant = Instant.now()
             val startInstant = nowInstant.minusSeconds(24 * 3600)
 
-            val token = "Bearer ${com.example.fitbodstravasyncer.util.StravaTokenManager.getValidAccessToken(context)}"
-            val stravaApi = com.example.fitbodstravasyncer.core.network.RetrofitProvider.retrofit.create(
-                com.example.fitbodstravasyncer.data.strava.StravaActivityService::class.java
-            )
-            val stravaActivities = stravaApi.listActivities(token, 200, 1)
+            val client = StravaApiClient(context)
+            val stravaActivities = client.listAllActivities()
 
             val newSessions = FitbodFetcher.fetchFitbodSessions(healthClient, startInstant, nowInstant, stravaActivities)
 
-            newSessions.forEach { session ->
-                dao.insert(session)
-            }
+            newSessions.forEach { session -> dao.insert(session) }
 
             val unsyncedSessions = dao.getAllOnce().filter { it.stravaId == null }
-
             if (unsyncedSessions.isNotEmpty()) {
                 Log.i(TAG, "Uploading ${unsyncedSessions.size} unsynced sessions to Strava")
                 unsyncedSessions.forEach { session ->
@@ -95,4 +86,5 @@ class StravaAutoUploadWorker(
             Result.retry()
         }
     }
+
 }

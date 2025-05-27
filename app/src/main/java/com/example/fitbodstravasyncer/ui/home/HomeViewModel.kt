@@ -12,7 +12,9 @@ import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.db.SessionEntity
 import com.example.fitbodstravasyncer.data.db.SessionRepository
 import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
+import com.example.fitbodstravasyncer.data.strava.StravaActivityResponse
 import com.example.fitbodstravasyncer.data.strava.StravaActivityService
+import com.example.fitbodstravasyncer.data.strava.StravaApiClient
 import com.example.fitbodstravasyncer.data.strava.StravaAuthService
 import com.example.fitbodstravasyncer.util.SessionMetrics
 import com.example.fitbodstravasyncer.util.StravaPrefs
@@ -136,20 +138,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         try {
             val start = from.atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val end = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
-            val healthClient = HealthConnectClient.Companion.getOrCreate(getApplication())
+            val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
+            val healthClient = HealthConnectClient.getOrCreate(getApplication())
 
-            // --- Fetch Strava activities for this window
-            val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
-            val stravaApi = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
-            val stravaActivities = stravaApi.listActivities(token, 200, 1)
-            // (Add paging here if your window is large!)
+            // --- Fetch ALL Strava activities in this window ---
+            val token   = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
+            val stravaApi = RetrofitProvider.createApiService(StravaActivityService::class.java)
 
-            // --- Fetch Fitbod sessions, matching to Strava activities
+            val stravaActivities = mutableListOf<StravaActivityResponse>()
+            var page = 1
+            while (true) {
+                val batch = stravaApi.listActivities(
+                    auth    = token,
+                    perPage = 200,
+                    page    = page
+                )
+                if (batch.isEmpty()) break
+                stravaActivities.addAll(batch)
+                page++
+            }
+
+            // --- Fetch Fitbod sessions and match them ---
             val sessions = FitbodFetcher.fetchFitbodSessions(
-                healthClient = healthClient,
-                startInstant = start,
-                endInstant = end,
+                healthClient     = healthClient,
+                startInstant     = start,
+                endInstant       = end,
                 stravaActivities = stravaActivities
             )
             sessions.forEach { repo.saveSession(it) }
@@ -159,6 +172,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isFetching = false) }
         }
     }
+
 
     fun restoreStravaIds() = viewModelScope.launch {
         try {
@@ -171,27 +185,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** Check all synced workouts and unsync if deleted on Strava */
     fun unsyncIfStravaDeleted() = viewModelScope.launch {
         try {
-            val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
-            val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
-            val dao = AppDatabase.Companion.getInstance(getApplication()).sessionDao()
+            val client = StravaApiClient(getApplication())
+            val dao = AppDatabase.getInstance(getApplication()).sessionDao()
 
-            // Step 1: Fetch all Strava activities with pagination
-            val stravaActivityIds = mutableSetOf<Long>()
-            var page = 1
-            val perPage = 200
-            while (true) {
-                val activities = api.listActivities(token, perPage, page)
-                if (activities.isEmpty()) break
-                val activityIds: List<Long> = activities.map { it.id as Long }
-                stravaActivityIds.addAll(activityIds)
-                page++
-            }
+            val stravaActivityIds = client.listAllActivities().mapNotNull { it.id }.toSet()
 
-            // Step 2: Get local sessions with a non-null stravaId
             val sessionsWithStravaId = dao.getAllOnce().filter { it.stravaId != null }
             var unsyncedCount = 0
 
-            // Step 3: Unsync sessions whose stravaId is not in the fetched Strava activity IDs
             for (session in sessionsWithStravaId) {
                 val stravaId = session.stravaId
                 if (stravaId != null && stravaId !in stravaActivityIds) {
@@ -206,15 +207,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+
     fun enqueueSyncAll() = viewModelScope.launch {
-        val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
-        val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
-        val recentActivities = api.listActivities(token, 200, 1) // Fetch ONCE!
+        val client = StravaApiClient(getApplication())
+        val recentActivities = client.listAllActivities()
 
         _uiState.value.sessionMetrics
             .filter { it.stravaId == null }
             .forEach { session ->
-                // Try to match locally first
                 val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
                 val sessionStartEpoch = session.startTime.epochSecond
                 val tolerance = 300L // 5 min
@@ -225,13 +225,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     } == true
                 }
                 if (matching != null) {
-                    AppDatabase.Companion.getInstance(getApplication()).sessionDao()
+                    AppDatabase.getInstance(getApplication()).sessionDao()
                         .updateStravaId(session.id, matching.id)
                 } else {
-                    StravaUploadWorker.Companion.enqueue(getApplication(), session.id)
+                    StravaUploadWorker.enqueue(getApplication(), session.id)
                 }
             }
     }
+
 
 
     private val _isStravaConnected = MutableStateFlow(
