@@ -40,8 +40,11 @@ interface StravaActivityService {
     suspend fun listActivities(
         @Header("Authorization") auth: String,
         @Query("per_page") perPage: Int = 50,
-        @Query("page") page: Int = 1
+        @Query("page") page: Int = 1,
+        @Query("after") after: Long? = null,
+        @Query("before") before: Long? = null
     ): List<StravaActivityResponse>
+
 
     @GET("activities/{id}")
     suspend fun getActivity(

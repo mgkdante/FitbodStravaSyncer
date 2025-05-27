@@ -4,14 +4,10 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.work.*
-import com.example.fitbodstravasyncer.core.network.RetrofitProvider
 import com.example.fitbodstravasyncer.data.db.AppDatabase
-import com.example.fitbodstravasyncer.data.strava.StravaActivityService
 import com.example.fitbodstravasyncer.data.strava.StravaApiClient
-import com.example.fitbodstravasyncer.data.strava.StravaUploadResponse
 import com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
 import com.example.fitbodstravasyncer.util.NotificationHelper
-import com.example.fitbodstravasyncer.util.StravaTokenManager
 import com.example.fitbodstravasyncer.util.TcxFileGenerator
 import com.example.fitbodstravasyncer.util.isStravaConnected
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +57,7 @@ class StravaUploadWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         var tcxFile: File? = null
+        val client = StravaApiClient(ctx)
         try {
             val sessionId = inputData.getString("SESSION_ID")?.takeIf { it.isNotBlank() }
                 ?: run {
@@ -92,9 +89,7 @@ class StravaUploadWorker(
                 return@withContext Result.success()
             }
 
-            // ——————————————————————————————————————————
-            // 👇 **NEW**: DRY remote-check via full paging
-            val client           = StravaApiClient(ctx)
+            // --- DRY remote-check via StravaApiClient ---
             val recentActivities = client.listAllActivities(perPage = 200)
             val formatter        = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
             val sessionEpoch     = session.startTime.epochSecond
@@ -116,7 +111,6 @@ class StravaUploadWorker(
                 )
                 return@withContext Result.success()
             }
-            // ——————————————————————————————————————————
 
             // build & upload TCX…
             tcxFile = TcxFileGenerator.generateTcxFile(
@@ -131,23 +125,16 @@ class StravaUploadWorker(
                 session.heartRateSeries
             )
 
-            val token = "Bearer ${StravaTokenManager.getValidAccessToken(ctx)}"
-            val api   = RetrofitProvider.createApiService(StravaActivityService::class.java)
-
-            val response: StravaUploadResponse = api.uploadActivity(
-                token,
-                MultipartBody.Part.createFormData(
-                    "file",
-                    "${session.id}.tcx",
-                    tcxFile.asRequestBody("application/xml".toMediaType())
-                ),
+            // --- DRY upload through StravaApiClient (NO manual token) ---
+            val response = client.uploadActivity(
+                MultipartBody.Part.createFormData("file", "${session.id}.tcx", tcxFile.asRequestBody("application/xml".toMediaType())),
                 "tcx".toRequestBody(),
                 "WeightTraining".toRequestBody(),
                 session.title.toRequestBody(),
                 session.description.toRequestBody()
             )
 
-            // poll status…
+            // Poll status
             var delayMs = 4_000L
             var checks  = 0
             val maxChecks = 60
@@ -155,7 +142,7 @@ class StravaUploadWorker(
 
             do {
                 delay(delayMs)
-                status = api.getUploadStatus(token, response.id)
+                status = client.getUploadStatus(response.id)
                 delayMs = (delayMs * 2).coerceAtMost(60_000L)
                 checks++
             } while (status.activity_id == null && checks < maxChecks)
@@ -196,4 +183,5 @@ class StravaUploadWorker(
             Result.retry()
         }
     }
+
 }

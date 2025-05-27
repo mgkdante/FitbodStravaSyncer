@@ -42,6 +42,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val repo =
         SessionRepository(AppDatabase.Companion.getInstance(application).sessionDao())
     private val prefs = StravaPrefs.securePrefs(application)
+    private val stravaClient = StravaApiClient(application)
 
     private val _uiState = MutableStateFlow(
         UiState(
@@ -141,22 +142,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
             val healthClient = HealthConnectClient.getOrCreate(getApplication())
 
-            // --- Fetch ALL Strava activities in this window ---
-            val token   = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
-            val stravaApi = RetrofitProvider.createApiService(StravaActivityService::class.java)
-
-            val stravaActivities = mutableListOf<StravaActivityResponse>()
-            var page = 1
-            while (true) {
-                val batch = stravaApi.listActivities(
-                    auth    = token,
-                    perPage = 200,
-                    page    = page
-                )
-                if (batch.isEmpty()) break
-                stravaActivities.addAll(batch)
-                page++
-            }
+            // --- Use DRY StravaApiClient ---
+            val stravaActivities = stravaClient.listAllActivities(
+                perPage = 200,
+                after = start.epochSecond,
+                before = end.epochSecond
+            )
 
             // --- Fetch Fitbod sessions and match them ---
             val sessions = FitbodFetcher.fetchFitbodSessions(
@@ -172,6 +163,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isFetching = false) }
         }
     }
+
 
 
     fun restoreStravaIds() = viewModelScope.launch {
