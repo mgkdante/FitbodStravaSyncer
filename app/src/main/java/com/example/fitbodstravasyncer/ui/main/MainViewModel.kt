@@ -1,4 +1,4 @@
-package com.example.fitbodstravasyncer.viewmodel
+package com.example.fitbodstravasyncer.ui.main
 
 import android.app.Application
 import android.util.Log
@@ -6,18 +6,19 @@ import androidx.core.content.edit
 import androidx.health.connect.client.HealthConnectClient
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.fitbodstravasyncer.BuildConfig.STRAVA_CLIENT_ID
-import com.example.fitbodstravasyncer.BuildConfig.STRAVA_CLIENT_SECRET
+import com.example.fitbodstravasyncer.BuildConfig
 import com.example.fitbodstravasyncer.core.network.RetrofitProvider
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.db.SessionEntity
 import com.example.fitbodstravasyncer.data.db.SessionRepository
+import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
 import com.example.fitbodstravasyncer.data.strava.StravaActivityService
 import com.example.fitbodstravasyncer.data.strava.StravaAuthService
-import com.example.fitbodstravasyncer.feature.schedule.data.DailySyncScheduler
-import com.example.fitbodstravasyncer.util.FitbodFetcher
 import com.example.fitbodstravasyncer.util.StravaPrefs
 import com.example.fitbodstravasyncer.util.StravaTokenManager
+import com.example.fitbodstravasyncer.util.SessionMetrics
+import com.example.fitbodstravasyncer.util.UiState
+import com.example.fitbodstravasyncer.worker.DailySyncScheduler
 import com.example.fitbodstravasyncer.worker.StravaAutoUploadWorker
 import com.example.fitbodstravasyncer.worker.StravaUploadWorker
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +37,8 @@ private const val KEY_DAILY = "daily_sync_enabled"
 private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo = SessionRepository(AppDatabase.getInstance(application).sessionDao())
+    private val repo =
+        SessionRepository(AppDatabase.Companion.getInstance(application).sessionDao())
     private val prefs = StravaPrefs.securePrefs(application)
 
     private val _uiState = MutableStateFlow(
@@ -85,9 +87,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleFutureSync(enabled: Boolean) = viewModelScope.launch {
         prefs.edit { putBoolean(KEY_FUTURE, enabled) }
         if (enabled) {
-            StravaAutoUploadWorker.schedule(getApplication())
+            StravaAutoUploadWorker.Companion.schedule(getApplication())
         } else {
-            StravaAutoUploadWorker.cancel(getApplication())
+            StravaAutoUploadWorker.Companion.cancel(getApplication())
         }
         _uiState.update { it.copy(futureSync = enabled) }
     }
@@ -108,7 +110,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val start = from.atStartOfDay(ZoneId.systemDefault()).toInstant()
             val end = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
-            val healthClient = HealthConnectClient.getOrCreate(getApplication())
+            val healthClient = HealthConnectClient.Companion.getOrCreate(getApplication())
 
             // --- Fetch Strava activities for this window
             val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
@@ -144,7 +146,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
             val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
-            val dao = AppDatabase.getInstance(getApplication()).sessionDao()
+            val dao = AppDatabase.Companion.getInstance(getApplication()).sessionDao()
 
             // Step 1: Fetch all Strava activities with pagination
             val stravaActivityIds = mutableSetOf<Long>()
@@ -196,10 +198,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     } == true
                 }
                 if (matching != null) {
-                    AppDatabase.getInstance(getApplication()).sessionDao()
+                    AppDatabase.Companion.getInstance(getApplication()).sessionDao()
                         .updateStravaId(session.id, matching.id)
                 } else {
-                    StravaUploadWorker.enqueue(getApplication(), session.id)
+                    StravaUploadWorker.Companion.enqueue(getApplication(), session.id)
                 }
             }
     }
@@ -219,8 +221,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Modify your existing exchangeStravaCodeForToken to update state:
     suspend fun exchangeStravaCodeForTokenInViewModel(code: String) {
-        val resp = StravaAuthService.create()
-            .exchangeCode(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, code)
+        val resp = StravaAuthService.Companion.create()
+            .exchangeCode(BuildConfig.STRAVA_CLIENT_ID, BuildConfig.STRAVA_CLIENT_SECRET, code)
         StravaPrefs.securePrefs(getApplication()).edit(commit = true) {
             putString(StravaPrefs.KEY_ACCESS, resp.accessToken)
             putString(StravaPrefs.KEY_REFRESH, resp.refreshToken)

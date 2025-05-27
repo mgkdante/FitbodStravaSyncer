@@ -1,7 +1,8 @@
 // MainScreen.kt
 
-package com.example.fitbodstravasyncer.ui
+package com.example.fitbodstravasyncer.ui.main
 
+import android.graphics.Paint
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -50,10 +51,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.fitbodstravasyncer.AppThemeMode
 import com.example.fitbodstravasyncer.data.db.HeartRateSampleEntity
-import com.example.fitbodstravasyncer.viewmodel.MainViewModel
-import com.example.fitbodstravasyncer.viewmodel.SessionMetrics
+import com.example.fitbodstravasyncer.util.SessionMetrics
+import com.example.fitbodstravasyncer.util.UiState
 import com.example.fitbodstravasyncer.worker.StravaUploadWorker
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -606,10 +606,10 @@ fun HeartRateChartInteractive(
                     bpm.toString(),
                     6f,
                     y + 12f,
-                    android.graphics.Paint().apply {
+                    Paint().apply {
                         color = labelColor.toArgb()
                         textSize = 32f
-                        textAlign = android.graphics.Paint.Align.LEFT
+                        textAlign = Paint.Align.LEFT
                     }
                 )
             }
@@ -637,10 +637,10 @@ fun HeartRateChartInteractive(
                     label,
                     x,
                     chartBottom + xAxisLabelHeightPx,
-                    android.graphics.Paint().apply {
+                    Paint().apply {
                         color = labelColor.toArgb()
                         textSize = 28f
-                        textAlign = android.graphics.Paint.Align.CENTER
+                        textAlign = Paint.Align.CENTER
                     }
                 )
             }
@@ -712,7 +712,7 @@ fun HeartRateChartInteractive(
 
 @Composable
 fun ActionsSheet(
-    state: com.example.fitbodstravasyncer.viewmodel.UiState,
+    state: UiState,
     showDeleteAll: () -> Unit,
     onFetch: () -> Unit,
     isFetching: Boolean,

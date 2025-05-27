@@ -1,4 +1,4 @@
-package com.example.fitbodstravasyncer.ui.theme
+package com.example.fitbodstravasyncer.core.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme

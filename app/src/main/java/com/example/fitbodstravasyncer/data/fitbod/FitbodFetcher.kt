@@ -1,4 +1,4 @@
-package com.example.fitbodstravasyncer.util
+package com.example.fitbodstravasyncer.data.fitbod
 
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
@@ -32,7 +32,7 @@ object FitbodFetcher {
         val response = healthClient.readRecords(
             ReadRecordsRequest(
                 ExerciseSessionRecord::class,
-                TimeRangeFilter.between(startInstant, endInstant)
+                TimeRangeFilter.Companion.between(startInstant, endInstant)
             )
         )
 
@@ -43,22 +43,22 @@ object FitbodFetcher {
 
             val calories = healthClient.aggregate(
                 AggregateRequest(
-                    setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
-                    TimeRangeFilter.between(record.startTime, record.endTime)
+                    setOf(ActiveCaloriesBurnedRecord.Companion.ACTIVE_CALORIES_TOTAL),
+                    TimeRangeFilter.Companion.between(record.startTime, record.endTime)
                 )
-            )[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+            )[ActiveCaloriesBurnedRecord.Companion.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
 
             val heartRate = healthClient.aggregate(
                 AggregateRequest(
-                    setOf(HeartRateRecord.BPM_AVG),
-                    TimeRangeFilter.between(record.startTime, record.endTime)
+                    setOf(HeartRateRecord.Companion.BPM_AVG),
+                    TimeRangeFilter.Companion.between(record.startTime, record.endTime)
                 )
-            )[HeartRateRecord.BPM_AVG]?.toDouble()
+            )[HeartRateRecord.Companion.BPM_AVG]?.toDouble()
 
             val heartRateRecords = healthClient.readRecords(
-                ReadRecordsRequest(
+                androidx.health.connect.client.request.ReadRecordsRequest(
                     HeartRateRecord::class,
-                    TimeRangeFilter.between(record.startTime, record.endTime)
+                    TimeRangeFilter.Companion.between(record.startTime, record.endTime)
                 )
             ).records
 

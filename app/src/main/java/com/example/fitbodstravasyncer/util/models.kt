@@ -1,4 +1,4 @@
-package com.example.fitbodstravasyncer.viewmodel
+package com.example.fitbodstravasyncer.util
 
 import com.example.fitbodstravasyncer.data.db.HeartRateSampleEntity
 import java.time.Instant

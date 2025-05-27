@@ -41,7 +41,7 @@
 
         <!-- Main launcher activity -->
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.main.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.FitbodStravaSyncer.Splash">

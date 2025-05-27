@@ -12,7 +12,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.fitbodstravasyncer.data.db.AppDatabase
-import com.example.fitbodstravasyncer.util.FitbodFetcher
+import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
 import com.example.fitbodstravasyncer.util.NotificationHelper
 import java.time.Instant
 import java.util.concurrent.TimeUnit

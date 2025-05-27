@@ -19,7 +19,7 @@ object NotificationHelper {
         notificationManager.createNotificationChannel(channel)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.notification_icon) // Replace with your app's icon
+            .setSmallIcon(R.drawable.ic_notification) // Replace with your app's icon
             .setContentTitle(title)
             .setContentText(message)
             .setAutoCancel(true)

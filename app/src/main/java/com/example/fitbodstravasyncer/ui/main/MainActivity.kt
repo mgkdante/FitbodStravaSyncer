@@ -1,5 +1,6 @@
-package com.example.fitbodstravasyncer
+package com.example.fitbodstravasyncer.ui.main
 
+import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.ui.graphics.toArgb
@@ -25,15 +26,12 @@ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.lifecycle.lifecycleScope
-import com.example.fitbodstravasyncer.data.strava.StravaAuthService
-import com.example.fitbodstravasyncer.ui.MainScreen
-import com.example.fitbodstravasyncer.ui.theme.FitbodStravaSyncerTheme
-import com.example.fitbodstravasyncer.util.StravaPrefs
-import com.example.fitbodstravasyncer.viewmodel.MainViewModel
+import com.example.fitbodstravasyncer.core.theme.FitbodStravaSyncerTheme
+import com.example.fitbodstravasyncer.ui.main.MainViewModel
 import kotlinx.coroutines.launch
-import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.example.fitbodstravasyncer.BuildConfig
 
 enum class AppThemeMode { SYSTEM, LIGHT, DARK }
 
@@ -53,8 +51,8 @@ class MainActivity : ComponentActivity() {
         healthConnectClient = HealthConnectClient.getOrCreate(this)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
             }
         }
 

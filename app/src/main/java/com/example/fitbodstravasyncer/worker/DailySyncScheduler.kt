@@ -1,6 +1,5 @@
-package com.example.fitbodstravasyncer.feature.schedule.data
+package com.example.fitbodstravasyncer.worker
 
-import com.example.fitbodstravasyncer.worker.StravaDailySyncWorker
 import android.content.Context
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
