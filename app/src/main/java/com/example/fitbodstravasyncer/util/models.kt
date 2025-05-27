@@ -1,5 +1,6 @@
 package com.example.fitbodstravasyncer.util
 
+import androidx.compose.runtime.Composable
 import com.example.fitbodstravasyncer.data.db.HeartRateSampleEntity
 import java.time.Instant
 import java.time.LocalDate
@@ -30,3 +31,10 @@ data class UiState(
 
 )
 
+data class LabeledControlConfig(
+    val key: String, // unique
+    val helpTitle: String,
+    val helpDescription: String,
+    val label: String? = null,
+    val content: @Composable () -> Unit
+)

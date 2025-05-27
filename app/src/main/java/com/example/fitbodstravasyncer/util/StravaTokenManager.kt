@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
 import com.example.fitbodstravasyncer.data.strava.StravaAuthService
+import com.example.fitbodstravasyncer.data.strava.StravaConstants.CLIENT_ID
+import com.example.fitbodstravasyncer.data.strava.StravaConstants.CLIENT_SECRET
 import java.util.concurrent.CancellationException
 
 object StravaTokenManager {
@@ -22,7 +24,7 @@ object StravaTokenManager {
             check(!refresh.isNullOrBlank()) { "Missing refresh token" }
 
             val resp = StravaAuthService.Companion.create()
-                .refreshToken(StravaKeys.CLIENT_ID, StravaKeys.CLIENT_SECRET, refresh)
+                .refreshToken(CLIENT_ID, CLIENT_SECRET, refresh)
 
             access = resp.accessToken
             if (resp.accessToken.isNullOrBlank() || resp.refreshToken.isNullOrBlank() || resp.expiresAt == null) {

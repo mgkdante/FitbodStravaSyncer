@@ -1,6 +1,7 @@
 package com.example.fitbodstravasyncer.core.network
 
 import com.example.fitbodstravasyncer.App
+import com.example.fitbodstravasyncer.data.strava.StravaConstants.BASE_URL
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.Cache
@@ -10,7 +11,6 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
 object RetrofitProvider {
-    private const val BASE_URL = "https://www.strava.com/api/v3/"
     private val cacheSize = 5L * 1024 * 1024 // 5 MB
     private val cache = Cache(App.instance.cacheDir, cacheSize)
 

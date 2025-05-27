@@ -39,22 +39,23 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Main launcher activity -->
+        <!-- Main launcher activity (handles OAuth redirect too) -->
         <activity
             android:name=".ui.main.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.FitbodStravaSyncer.Splash">
 
-        <intent-filter>
+            <!-- Main launcher intent filter -->
+            <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Health Connect permission rationale (Android 13‑) -->
+        <!-- Health Connect permission rationale (Android 13+) -->
         <activity
-            android:name=".feature.schedule.ui.PermissionsRationaleActivity"
+            android:name=".ui.PermissionsRationaleActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
@@ -67,7 +68,7 @@
             android:name=".ViewPermissionUsageActivity"
             android:exported="true"
             android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
-            android:targetActivity=".feature.schedule.ui.PermissionsRationaleActivity">
+            android:targetActivity=".ui.PermissionsRationaleActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
@@ -76,7 +77,7 @@
 
         <!-- Strava OAuth redirect handler -->
         <activity
-            android:name=".feature.schedule.ui.StravaRedirectActivity"
+            android:name=".ui.main.StravaRedirectActivity"
             android:exported="true"
             android:noHistory="true">
             <intent-filter android:label="Strava OAuth Redirect">
@@ -87,5 +88,6 @@
             </intent-filter>
         </activity>
 
+        <!-- REMOVE THIS: No need for StravaRedirectActivity anymore! -->
     </application>
 </manifest>

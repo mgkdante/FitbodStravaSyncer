@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/fitbodstravasyncer/StravaAuthService.kt
 package com.example.fitbodstravasyncer.data.strava
 
 import com.squareup.moshi.Json

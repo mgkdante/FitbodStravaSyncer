@@ -1,4 +1,4 @@
-package com.example.fitbodstravasyncer.ui.main
+package com.example.fitbodstravasyncer.ui.home
 
 import android.app.Application
 import android.util.Log
@@ -14,9 +14,9 @@ import com.example.fitbodstravasyncer.data.db.SessionRepository
 import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
 import com.example.fitbodstravasyncer.data.strava.StravaActivityService
 import com.example.fitbodstravasyncer.data.strava.StravaAuthService
+import com.example.fitbodstravasyncer.util.SessionMetrics
 import com.example.fitbodstravasyncer.util.StravaPrefs
 import com.example.fitbodstravasyncer.util.StravaTokenManager
-import com.example.fitbodstravasyncer.util.SessionMetrics
 import com.example.fitbodstravasyncer.util.UiState
 import com.example.fitbodstravasyncer.worker.DailySyncScheduler
 import com.example.fitbodstravasyncer.worker.StravaAutoUploadWorker
@@ -36,7 +36,7 @@ private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
 private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val repo =
         SessionRepository(AppDatabase.Companion.getInstance(application).sessionDao())
     private val prefs = StravaPrefs.securePrefs(application)
@@ -50,6 +50,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     )
     val uiState: StateFlow<UiState> = _uiState
+
+    // In MainViewModel.kt
+
+    private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedIds: StateFlow<Set<String>> = _selectedIds
+
+    private val _expandedIds = MutableStateFlow<Set<String>>(emptySet())
+    val expandedIds: StateFlow<Set<String>> = _expandedIds
+
 
     init {
         loadSessions()
@@ -66,6 +75,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleDynamicColor(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_DYNAMIC_COLOR, enabled) }
         _uiState.update { it.copy(dynamicColor = enabled) }
+    }
+
+    fun toggleSelection(id: String) {
+        _selectedIds.value = if (_selectedIds.value.contains(id))
+            _selectedIds.value - id
+        else
+            _selectedIds.value + id
+    }
+
+    fun toggleExpansion(id: String) {
+        _expandedIds.value = if (_expandedIds.value.contains(id))
+            _expandedIds.value - id
+        else
+            _expandedIds.value + id
+    }
+
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
     }
 
     fun deleteSessions(ids: List<String>) = viewModelScope.launch {

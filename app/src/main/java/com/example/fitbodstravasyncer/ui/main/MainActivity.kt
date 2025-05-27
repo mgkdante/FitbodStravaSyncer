@@ -1,9 +1,9 @@
 package com.example.fitbodstravasyncer.ui.main
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.compose.ui.graphics.toArgb
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,37 +18,41 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.contracts.HealthPermissionsRequestContract
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import com.example.fitbodstravasyncer.core.theme.FitbodStravaSyncerTheme
-import com.example.fitbodstravasyncer.ui.main.MainViewModel
+import com.example.fitbodstravasyncer.ui.auth.AuthScreen
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.example.fitbodstravasyncer.BuildConfig
+import com.example.fitbodstravasyncer.data.strava.StravaConstants.AUTH_URL
+import com.example.fitbodstravasyncer.data.strava.StravaConstants.CLIENT_ID
+import com.example.fitbodstravasyncer.data.strava.StravaConstants.REDIRECT_URI
+import com.example.fitbodstravasyncer.ui.home.MainScreen
+import com.example.fitbodstravasyncer.ui.home.HomeViewModel
 
 enum class AppThemeMode { SYSTEM, LIGHT, DARK }
 
 class MainActivity : ComponentActivity() {
-    private val viewModel: MainViewModel by viewModels()
+    private val viewModel: HomeViewModel by viewModels()
     private lateinit var healthConnectClient: HealthConnectClient
-
-    // Strava OAuth constants
-    private val STRAVA_CLIENT_ID     = BuildConfig.STRAVA_CLIENT_ID
-    private val STRAVA_CLIENT_SECRET = BuildConfig.STRAVA_CLIENT_SECRET
-    private val STRAVA_REDIRECT_URI  = "myapp://strava-auth"
-    private val STRAVA_AUTH_URL      = "https://www.strava.com/oauth/authorize"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         healthConnectClient = HealthConnectClient.getOrCreate(this)
+
+        // Always update Strava connection state on launch
+        viewModel.updateStravaConnectionState()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -87,25 +91,26 @@ class MainActivity : ComponentActivity() {
                 refreshKey++
             }
 
-            // --- Strava OAuth launcher ---
+            // --- Strava OAuth launcher (for in-app flow, e.g. device browserless) ---
             val stravaAuthLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartActivityForResult()
             ) { result ->
                 result.data?.data
-                    ?.takeIf { it.toString().startsWith(STRAVA_REDIRECT_URI) }
+                    ?.takeIf { it.toString().startsWith(REDIRECT_URI) }
                     ?.getQueryParameter("code")
                     ?.let { code ->
                         lifecycleScope.launch {
                             viewModel.exchangeStravaCodeForTokenInViewModel(code)
+                            // No snackbar or toast here.
                         }
                     }
             }
 
             // --- Kick off Strava auth via Custom Tabs ---
             fun launchStravaAuthFlow() {
-                val authUri = STRAVA_AUTH_URL.toUri().buildUpon()
-                    .appendQueryParameter("client_id", STRAVA_CLIENT_ID)
-                    .appendQueryParameter("redirect_uri", STRAVA_REDIRECT_URI)
+                val authUri = AUTH_URL.toUri().buildUpon()
+                    .appendQueryParameter("client_id", CLIENT_ID)
+                    .appendQueryParameter("redirect_uri", REDIRECT_URI)
                     .appendQueryParameter("response_type", "code")
                     .appendQueryParameter("scope", "activity:read_all,activity:write")
                     .appendQueryParameter("approval_prompt", "auto")
@@ -128,11 +133,26 @@ class MainActivity : ComponentActivity() {
                 viewModel.updateStravaConnectionState()
             }
 
+            // --- Lifecycle observer for ON_RESUME ---
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        viewModel.updateStravaConnectionState()
+                        // No toast/snackbar here! Only after successful auth.
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
             // --- UI scaffold ---
             FitbodStravaSyncerTheme(darkTheme = darkTheme) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(
+                    Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     if (!permissionsChecked) {
-                        // Show a loading spinner while checking permissions
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -141,7 +161,7 @@ class MainActivity : ComponentActivity() {
                         }
                     } else {
                         if (!hasHealthPermissions || !isStravaConnected) {
-                            SetupScreen(
+                            AuthScreen(
                                 hasHealthPermissions = hasHealthPermissions,
                                 onRequestHealthPermissions = { permissionLauncher.launch(permissions) },
                                 isStravaConnected = isStravaConnected,
@@ -158,52 +178,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
     }
-}
 
-
-/** Simple two-step onboarding UI */
-@Composable
-fun SetupScreen(
-    hasHealthPermissions: Boolean,
-    onRequestHealthPermissions: () -> Unit,
-    isStravaConnected: Boolean,
-    onConnectStrava: () -> Unit
-) {
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement   = Arrangement.Center,
-        horizontalAlignment   = Alignment.CenterHorizontally
-    ) {
-        Text("Welcome! Let’s get set up.", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(32.dp))
-
-        if (!hasHealthPermissions) {
-            Text("Step 1: Grant Health Connect Permission")
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onRequestHealthPermissions) {
-                Text("Grant Health Connect")
-            }
-        } else {
-            Text("✔️ Health Connect Granted")
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        if (!isStravaConnected) {
-            Text("Step 2: Connect to Strava")
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onConnectStrava) {
-                Text("Connect Strava")
-            }
-        } else {
-            Text("✔️ Strava Connected")
-        }
-
-        Spacer(Modifier.height(32.dp))
-        if (hasHealthPermissions && isStravaConnected) {
-            Text("Setup complete! Entering app…")
-        }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        viewModel.updateStravaConnectionState()
     }
 }
