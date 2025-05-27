@@ -1,7 +1,6 @@
 package com.example.fitbodstravasyncer.data.strava
 
 import android.content.Context
-import android.util.Log
 import com.example.fitbodstravasyncer.core.network.RetrofitProvider
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.util.StravaTokenManager

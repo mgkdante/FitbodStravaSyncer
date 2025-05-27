@@ -10,6 +10,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.util.FitbodFetcher
+import com.example.fitbodstravasyncer.util.NotificationHelper
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -65,13 +66,19 @@ class StravaAutoUploadWorker(
 
             val unsyncedSessions = dao.getAllOnce().filter { it.stravaId == null }
 
-            Log.i(TAG, "Uploading ${unsyncedSessions.size} unsynced sessions to Strava")
-
-            unsyncedSessions.forEach { session ->
-                Log.i(TAG, "Enqueuing upload for session ${session.id}")
-                StravaUploadWorker.enqueue(context, session.id)
+            if (unsyncedSessions.isNotEmpty()) {
+                Log.i(TAG, "Uploading ${unsyncedSessions.size} unsynced sessions to Strava")
+                unsyncedSessions.forEach { session ->
+                    Log.i(TAG, "Enqueuing upload for session ${session.id}")
+                    StravaUploadWorker.enqueue(context, session.id)
+                }
+                NotificationHelper.showNotification(
+                    applicationContext,
+                    "Auto Strava Sync",
+                    "${unsyncedSessions.size} new Fitbod session(s) uploaded to Strava.",
+                    10125
+                )
             }
-
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Auto-sync failed", e)

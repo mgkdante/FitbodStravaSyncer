@@ -29,7 +29,6 @@ import com.example.fitbodstravasyncer.data.strava.StravaAuthService
 import com.example.fitbodstravasyncer.ui.MainScreen
 import com.example.fitbodstravasyncer.ui.theme.FitbodStravaSyncerTheme
 import com.example.fitbodstravasyncer.util.StravaPrefs
-import com.example.fitbodstravasyncer.util.isStravaConnected
 import com.example.fitbodstravasyncer.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
@@ -162,16 +161,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    }
-
-    private suspend fun exchangeStravaCodeForToken(code: String) {
-        val resp = StravaAuthService.create()
-            .exchangeCode(STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, code)
-        StravaPrefs.securePrefs(applicationContext).edit(commit = true) {
-            putString(StravaPrefs.KEY_ACCESS,  resp.accessToken)
-            putString(StravaPrefs.KEY_REFRESH, resp.refreshToken)
-            putLong(  StravaPrefs.KEY_EXPIRES, resp.expiresAt ?: 0L)
-        }
     }
 }
 

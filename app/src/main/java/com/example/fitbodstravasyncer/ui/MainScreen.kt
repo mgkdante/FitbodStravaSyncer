@@ -2,7 +2,6 @@
 
 package com.example.fitbodstravasyncer.ui
 
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -16,8 +15,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -240,6 +237,7 @@ fun MainScreen(
                         onCheckMatching = {
                             isChecking = true
                             viewModel.restoreStravaIds()
+                            viewModel.unsyncIfStravaDeleted()
                             Toast.makeText(context, "Matching Strava workouts checked.", Toast.LENGTH_SHORT).show()
                             isChecking = false
                             showSheet = false
@@ -552,11 +550,6 @@ fun HeartRateChartInteractive(
                     }
                     selectedIndex.value = idx
                 }
-                // Reset tooltip when finger/mouse leaves chart area
-                if (event.changes.all { !it.pressed }) {
-                    // Optionally comment out the next line to keep tooltip on last touched point
-                    // selectedIndex.value = null
-                }
             }
         }
     }
@@ -628,7 +621,7 @@ fun HeartRateChartInteractive(
                     strokeWidth = 1f
                 )
                 val label = try {
-                    java.time.Instant.ofEpochSecond(t).atZone(java.time.ZoneId.systemDefault()).toLocalTime().format(timeFormatter)
+                    Instant.ofEpochSecond(t).atZone(ZoneId.systemDefault()).toLocalTime().format(timeFormatter)
                 } catch (e: Exception) { "" }
                 drawContext.canvas.nativeCanvas.drawText(
                     label,
@@ -686,7 +679,7 @@ fun HeartRateChartInteractive(
         // Tooltip UI (below chart)
         selectedIndex.value?.let { idx ->
             val sample = sortedSeries[idx]
-            val t = sample.time.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+            val t = sample.time.atZone(ZoneId.systemDefault()).toLocalTime()
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -881,28 +874,6 @@ fun MaterialDatePickerDialog(
     }
 }
 
-@Composable
-fun SegmentedButton(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    OutlinedButton(
-        onClick = onClick,
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-            else MaterialTheme.colorScheme.surface
-        ),
-        border = if (selected) ButtonDefaults.outlinedButtonBorder else null,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        modifier = Modifier.height(32.dp)
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium)
-    }
-}
 
 @Composable
 private fun StatColumn(

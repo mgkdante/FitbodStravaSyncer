@@ -8,13 +8,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fitbodstravasyncer.BuildConfig.STRAVA_CLIENT_ID
 import com.example.fitbodstravasyncer.BuildConfig.STRAVA_CLIENT_SECRET
+import com.example.fitbodstravasyncer.core.network.RetrofitProvider
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.db.SessionEntity
 import com.example.fitbodstravasyncer.data.db.SessionRepository
+import com.example.fitbodstravasyncer.data.strava.StravaActivityService
 import com.example.fitbodstravasyncer.data.strava.StravaAuthService
 import com.example.fitbodstravasyncer.feature.schedule.data.DailySyncScheduler
 import com.example.fitbodstravasyncer.util.FitbodFetcher
 import com.example.fitbodstravasyncer.util.StravaPrefs
+import com.example.fitbodstravasyncer.util.StravaTokenManager
+import com.example.fitbodstravasyncer.worker.StravaAutoUploadWorker
 import com.example.fitbodstravasyncer.worker.StravaUploadWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,20 +27,22 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 
-private const val KEY_FUTURE        = "future_auto_sync"
-private const val KEY_DAILY         = "daily_sync_enabled"
+private const val KEY_FUTURE = "future_auto_sync"
+private const val KEY_DAILY = "daily_sync_enabled"
 private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo   = SessionRepository(AppDatabase.getInstance(application).sessionDao())
-    private val prefs  = StravaPrefs.securePrefs(application)
+    private val repo = SessionRepository(AppDatabase.getInstance(application).sessionDao())
+    private val prefs = StravaPrefs.securePrefs(application)
 
-    private val _uiState = MutableStateFlow(UiState(
-        dynamicColor   = prefs.getBoolean(KEY_DYNAMIC_COLOR, true),
-        futureSync     = prefs.getBoolean(KEY_FUTURE, false),
-        dailySync      = prefs.getBoolean(KEY_DAILY, false),
-        stravaConnected = prefs.getString(StravaPrefs.KEY_ACCESS, null) != null
-    ))
+    private val _uiState = MutableStateFlow(
+        UiState(
+            dynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true),
+            futureSync = prefs.getBoolean(KEY_FUTURE, false),
+            dailySync = prefs.getBoolean(KEY_DAILY, false),
+            stravaConnected = prefs.getString(StravaPrefs.KEY_ACCESS, null) != null
+        )
+    )
     val uiState: StateFlow<UiState> = _uiState
 
     init {
@@ -74,13 +80,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleFutureSync(enabled: Boolean) = viewModelScope.launch {
         prefs.edit { putBoolean(KEY_FUTURE, enabled) }
+        if (enabled) {
+            StravaAutoUploadWorker.schedule(getApplication())
+        } else {
+            StravaAutoUploadWorker.cancel(getApplication())
+        }
         _uiState.update { it.copy(futureSync = enabled) }
     }
 
     fun toggleDailySync(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_DAILY, enabled) }
         if (enabled) DailySyncScheduler.schedule(getApplication())
-        else       DailySyncScheduler.cancel(getApplication())
+        else DailySyncScheduler.cancel(getApplication())
         _uiState.update { it.copy(dailySync = enabled) }
     }
 
@@ -92,14 +103,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         try {
             val start = from.atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
+            val end = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
             val healthClient = HealthConnectClient.getOrCreate(getApplication())
 
             // --- Fetch Strava activities for this window
-            val token = "Bearer ${com.example.fitbodstravasyncer.util.StravaTokenManager.getValidAccessToken(getApplication())}"
-            val stravaApi = com.example.fitbodstravasyncer.core.network.RetrofitProvider.retrofit.create(
-                com.example.fitbodstravasyncer.data.strava.StravaActivityService::class.java
-            )
+            val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
+            val stravaApi = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
             val stravaActivities = stravaApi.listActivities(token, 200, 1)
             // (Add paging here if your window is large!)
 
@@ -118,12 +127,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-
     fun restoreStravaIds() = viewModelScope.launch {
         try {
             com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication())
         } catch (e: Exception) {
             Log.i("strava-log", e.toString())
+        }
+    }
+
+    /** Check all synced workouts and unsync if deleted on Strava */
+    fun unsyncIfStravaDeleted() = viewModelScope.launch {
+        try {
+            val token = "Bearer ${StravaTokenManager.getValidAccessToken(getApplication())}"
+            val api = RetrofitProvider.retrofit.create(StravaActivityService::class.java)
+            val dao = AppDatabase.getInstance(getApplication()).sessionDao()
+
+            // Step 1: Fetch all Strava activities with pagination
+            val stravaActivityIds = mutableSetOf<Long>()
+            var page = 1
+            val perPage = 200
+            while (true) {
+                val activities = api.listActivities(token, perPage, page)
+                if (activities.isEmpty()) break
+                val activityIds: List<Long> = activities.map { it.id as Long }
+                stravaActivityIds.addAll(activityIds)
+                page++
+            }
+
+            // Step 2: Get local sessions with a non-null stravaId
+            val sessionsWithStravaId = dao.getAllOnce().filter { it.stravaId != null }
+            var unsyncedCount = 0
+
+            // Step 3: Unsync sessions whose stravaId is not in the fetched Strava activity IDs
+            for (session in sessionsWithStravaId) {
+                val stravaId = session.stravaId
+                if (stravaId != null && stravaId !in stravaActivityIds) {
+                    dao.updateStravaId(session.id, null)
+                    unsyncedCount++
+                    Log.i("strava-sync", "Unsynced ${session.id} (deleted on Strava)")
+                }
+            }
+            Log.i("strava-sync", "Unsynced $unsyncedCount workouts that were deleted on Strava.")
+        } catch (e: Exception) {
+            Log.e("strava-sync", "Failed to unsync deleted Strava workouts: ${e.message}")
         }
     }
 
@@ -160,14 +206,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
 private fun SessionEntity.toMetrics(): SessionMetrics =
     SessionMetrics(
-        id            = id,
-        title         = title,
-        description   = description,
-        dateTime      = dateTime,
-        startTime     = startTime,
-        activeTime    = activeTime,
-        calories      = calories,
+        id = id,
+        title = title,
+        description = description,
+        dateTime = dateTime,
+        startTime = startTime,
+        activeTime = activeTime,
+        calories = calories,
         heartRateSeries = heartRateSeries.sortedBy { it.time },
-        avgHeartRate  = avgHeartRate?.toDouble(),
-        stravaId      = stravaId
+        avgHeartRate = avgHeartRate?.toDouble(),
+        stravaId = stravaId
     )

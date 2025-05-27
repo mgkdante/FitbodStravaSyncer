@@ -19,7 +19,7 @@ interface SessionDao {
     suspend fun insert(session: SessionEntity)
 
     @Query("UPDATE sessions SET stravaId = :stravaId WHERE id = :sessionId")
-    suspend fun updateStravaId(sessionId: String, stravaId: Long)
+    suspend fun updateStravaId(sessionId: String, stravaId: Long?)
 
     @Query("DELETE FROM sessions WHERE startTime < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)

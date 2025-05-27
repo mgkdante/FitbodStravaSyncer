@@ -43,6 +43,11 @@ interface StravaActivityService {
         @Query("page") page: Int = 1
     ): List<StravaActivityResponse>
 
+    @GET("activities/{id}")
+    suspend fun getActivity(
+        @Header("Authorization") auth: String,
+        @Path("id") activityId: Long
+    ): StravaActivityResponse
 
 
 }
