@@ -106,6 +106,7 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        ApiUsageBanner(state)
                         CheckUncheckAllRow(
                             sessions = sessions,
                             selectedIds = selectedIds,

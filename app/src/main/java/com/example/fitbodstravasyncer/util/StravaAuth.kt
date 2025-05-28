@@ -22,6 +22,18 @@ object StravaPrefs {
     const val KEY_LAST_FETCH_EPOCH = "last_strava_fetch_epoch"
     const val KEY_API_LIMIT_RESET = "api_limit_reset"
 
+    const val KEY_USER_REQUESTS_15M = "user_api_requests_15m"
+    const val KEY_USER_REQUESTS_DAY = "user_api_requests_day"
+    const val KEY_USER_READS_15M = "user_api_reads_15m"
+    const val KEY_USER_READS_DAY = "user_api_reads_day"
+    const val KEY_USER_REQUESTS_15M_TS = "user_api_requests_15m_ts"
+    const val KEY_USER_REQUESTS_DAY_TS = "user_api_requests_day_ts"
+
+    const val USER_READS_15M_LIMIT = 90
+    const val USER_REQUESTS_15M_LIMIT = 180
+    const val USER_READS_DAY_LIMIT = 900
+    const val USER_REQUESTS_DAY_LIMIT = 1800
+
 
     fun getLastFetchEpoch(context: Context): Long =
         securePrefs(context).getLong(KEY_LAST_FETCH_EPOCH, 0L)
@@ -29,28 +41,55 @@ object StravaPrefs {
     fun setLastFetchEpoch(context: Context, epoch: Long) =
         securePrefs(context).edit { putLong(KEY_LAST_FETCH_EPOCH, epoch) }
 
-    fun incrementApiRequestCount(context: Context) {
+    fun incrementUserApiRequest(context: Context, isRead: Boolean) {
         val prefs = securePrefs(context)
         val now = System.currentTimeMillis()
         val dayStart = now / (24 * 60 * 60 * 1000)
         val min15Start = now / (15 * 60 * 1000)
-        val prevDay = prefs.getLong(KEY_REQUEST_TIMESTAMP_DAY, -1)
-        val prev15m = prefs.getLong(KEY_REQUEST_TIMESTAMP_15M, -1)
-        val dayCount = if (prevDay == dayStart) prefs.getInt(KEY_REQUEST_COUNT_DAY, 0) else 0
-        val min15Count = if (prev15m == min15Start) prefs.getInt(KEY_REQUEST_COUNT_15M, 0) else 0
+
+        val prevDay = prefs.getLong(KEY_USER_REQUESTS_DAY_TS, -1)
+        val prev15m = prefs.getLong(KEY_USER_REQUESTS_15M_TS, -1)
+        val dayReqCount = if (prevDay == dayStart) prefs.getInt(KEY_USER_REQUESTS_DAY, 0) else 0
+        val min15ReqCount = if (prev15m == min15Start) prefs.getInt(KEY_USER_REQUESTS_15M, 0) else 0
+        val dayReadCount = if (prevDay == dayStart) prefs.getInt(KEY_USER_READS_DAY, 0) else 0
+        val min15ReadCount = if (prev15m == min15Start) prefs.getInt(KEY_USER_READS_15M, 0) else 0
+
         prefs.edit {
-            putLong(KEY_REQUEST_TIMESTAMP_DAY, dayStart)
-            putLong(KEY_REQUEST_TIMESTAMP_15M, min15Start)
-            putInt(KEY_REQUEST_COUNT_DAY, dayCount + 1)
-            putInt(KEY_REQUEST_COUNT_15M, min15Count + 1)
+            putLong(KEY_USER_REQUESTS_DAY_TS, dayStart)
+            putLong(KEY_USER_REQUESTS_15M_TS, min15Start)
+            putInt(KEY_USER_REQUESTS_DAY, dayReqCount + 1)
+            putInt(KEY_USER_REQUESTS_15M, min15ReqCount + 1)
+            if (isRead) {
+                putInt(KEY_USER_READS_DAY, dayReadCount + 1)
+                putInt(KEY_USER_READS_15M, min15ReadCount + 1)
+            }
         }
     }
 
-    fun isApiLimitNear(context: Context): Boolean {
-        val day = getApiRequestCountDay(context)
-        val min15 = getApiRequestCount15Min(context)
-        // You can tweak the warning threshold (e.g., 90% of the limit)
-        return day >= 1800 || min15 >= 180
+    fun getUserApiRequestCount15Min(context: Context): Int =
+        securePrefs(context).getInt(KEY_USER_REQUESTS_15M, 0)
+    fun getUserApiRequestCountDay(context: Context): Int =
+        securePrefs(context).getInt(KEY_USER_REQUESTS_DAY, 0)
+    fun getUserApiReadCount15Min(context: Context): Int =
+        securePrefs(context).getInt(KEY_USER_READS_15M, 0)
+    fun getUserApiReadCountDay(context: Context): Int =
+        securePrefs(context).getInt(KEY_USER_READS_DAY, 0)
+
+
+    fun isUserApiLimitNear(context: Context): Boolean {
+        return getUserApiReadCount15Min(context) >= (USER_READS_15M_LIMIT * 0.9).toInt() ||
+                getUserApiRequestCount15Min(context) >= (USER_REQUESTS_15M_LIMIT * 0.9).toInt() ||
+                getUserApiReadCountDay(context) >= (USER_READS_DAY_LIMIT * 0.9).toInt() ||
+                getUserApiRequestCountDay(context) >= (USER_REQUESTS_DAY_LIMIT * 0.9).toInt()
+    }
+
+
+
+    fun isUserApiLimitReached(context: Context): Boolean {
+        return getUserApiReadCount15Min(context) >= USER_READS_15M_LIMIT ||
+                getUserApiRequestCount15Min(context) >= USER_REQUESTS_15M_LIMIT ||
+                getUserApiReadCountDay(context) >= USER_READS_DAY_LIMIT ||
+                getUserApiRequestCountDay(context) >= USER_REQUESTS_DAY_LIMIT
     }
 
 

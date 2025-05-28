@@ -27,7 +27,7 @@ class StravaApiClient(private val context: Context) {
         before: Long? = null,
         cacheLastFetch: Boolean = false
     ): List<StravaActivityResponse> {
-        StravaPrefs.incrementApiRequestCount(context)
+        StravaPrefs.incrementUserApiRequest(context, isRead = true)
         val token = getAuthToken()
         val all = mutableListOf<StravaActivityResponse>()
         var page = 1
@@ -49,8 +49,6 @@ class StravaApiClient(private val context: Context) {
         return all
     }
 
-
-
     /**
      * Helper: one page only.
      */
@@ -60,7 +58,7 @@ class StravaApiClient(private val context: Context) {
         after: Long? = null,
         before: Long? = null
     ): List<StravaActivityResponse> {
-        StravaPrefs.incrementApiRequestCount(context)
+        StravaPrefs.incrementUserApiRequest(context, isRead = true)
         val token = getAuthToken()
         return api.listActivities(token, perPage, page, after, before)
     }
@@ -74,7 +72,7 @@ class StravaApiClient(private val context: Context) {
         name: RequestBody,
         description: RequestBody
     ): StravaUploadResponse {
-        StravaPrefs.incrementApiRequestCount(context)
+        StravaPrefs.incrementUserApiRequest(context, isRead = false)
         val token = getAuthToken()
         return api.uploadActivity(
             auth        = token,
@@ -90,7 +88,7 @@ class StravaApiClient(private val context: Context) {
     suspend fun getUploadStatus(
         uploadId: Long
     ): StravaUploadStatusResponse {
-        StravaPrefs.incrementApiRequestCount(context)
+        StravaPrefs.incrementUserApiRequest(context, isRead = true)
         val token = getAuthToken()
         return api.getUploadStatus(token, uploadId)
     }
@@ -99,7 +97,7 @@ class StravaApiClient(private val context: Context) {
     suspend fun getActivity(
         activityId: Long
     ): StravaActivityResponse {
-        StravaPrefs.incrementApiRequestCount(context)
+        StravaPrefs.incrementUserApiRequest(context, isRead = true)
         val token = getAuthToken()
         return api.getActivity(token, activityId)
     }

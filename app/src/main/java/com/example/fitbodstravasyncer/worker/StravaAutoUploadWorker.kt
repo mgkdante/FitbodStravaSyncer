@@ -55,6 +55,16 @@ class StravaAutoUploadWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        if (StravaPrefs.isUserApiLimitNear(applicationContext)) {
+            NotificationHelper.showNotification(
+                applicationContext,
+                "API Usage High",
+                "Auto-sync paused: Nearing your Strava API limit.",
+                10200
+            )
+            return@withContext Result.retry()
+        }
+
         if (StravaPrefs.getApiLimitReset(applicationContext) > System.currentTimeMillis()) {
             val hint = ApiRateLimitUtil.getApiResetTimeHint(applicationContext)
             NotificationHelper.showNotification(

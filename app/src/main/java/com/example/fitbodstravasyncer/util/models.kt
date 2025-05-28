@@ -32,8 +32,9 @@ data class UiState(
     val apiRequests15Min: Int = 0,
     val apiLimitReached: Boolean = false,
     val apiLimitResetHint: String = "",
-    val hasFetchedOnce: Boolean = false
-
+    val hasFetchedOnce: Boolean = false,
+    val userApiUsageString: String = "",
+    val userApiWarning: Boolean = false
 )
 
 data class LabeledControlConfig(

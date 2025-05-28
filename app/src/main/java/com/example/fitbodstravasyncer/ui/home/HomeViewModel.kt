@@ -46,7 +46,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = StravaPrefs.securePrefs(application)
     private val stravaClient = StravaApiClient(application)
     private var lastCheckMatching = 0L
-    private var lastSyncAll = 0L
 
     sealed class SessionsUiState {
         object Loading : SessionsUiState()
@@ -80,10 +79,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _expandedIds = MutableStateFlow<Set<String>>(emptySet())
     val expandedIds: StateFlow<Set<String>> = _expandedIds
 
-    // At top of HomeViewModel
-    private val _pendingDataLoad = MutableStateFlow(false)
-    val pendingDataLoad: StateFlow<Boolean> get() = _pendingDataLoad
-
     private val _sessionsUiState = MutableStateFlow<SessionsUiState>(SessionsUiState.Loading)
     val sessionsUiState: StateFlow<SessionsUiState> = _sessionsUiState
 
@@ -91,6 +86,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadSessions()
         refreshApiCounters()
+        updateUserApiUsageState()
+    }
+
+    private fun blockIfUserLimitReached(): Boolean {
+        if (StravaPrefs.isUserApiLimitReached(getApplication())) {
+            Toast.makeText(getApplication(), "You've hit your personal Strava API usage limit. Please try again in 15 minutes.", Toast.LENGTH_LONG).show()
+            return true
+        }
+        return false
     }
 
     private fun loadSessions() = viewModelScope.launch {
@@ -130,7 +134,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkAndWarnApiLimits() {
         val context = getApplication<Application>()
         val now = System.currentTimeMillis()
-        if (StravaPrefs.isApiLimitNear(context) && now - lastWarnedAt > 60 * 1000) {
+        if (StravaPrefs.isUserApiLimitNear(context) && now - lastWarnedAt > 60 * 1000) {
             lastWarnedAt = now
             Toast.makeText(context, UiStrings.STRAVA_API_LIMIT_NEARLY_REACHED, Toast.LENGTH_LONG).show()
             NotificationHelper.showNotification(
@@ -168,25 +172,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return now - lastCheckMatching > 15 * 60 * 1000
     }
 
-    fun canTriggerSyncAll(): Boolean {
-        val now = System.currentTimeMillis()
-        return now - lastSyncAll > 15 * 60 * 1000
-    }
-
     fun triggerCheckMatching(action: suspend () -> Unit) {
         if (canTriggerCheckMatching()) {
             lastCheckMatching = System.currentTimeMillis()
-            viewModelScope.launch {
-                action()
-                refreshApiCounters()
-            }
-        }
-        checkAndWarnApiLimits()
-    }
-
-    fun triggerSyncAll(action: suspend () -> Unit) {
-        if (canTriggerSyncAll()) {
-            lastSyncAll = System.currentTimeMillis()
             viewModelScope.launch {
                 action()
                 refreshApiCounters()
@@ -257,11 +245,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun fetchSessions(from: LocalDate?, to: LocalDate?) = viewModelScope.launch {
-        _pendingDataLoad.value = true
+        if (blockIfUserLimitReached()) return@launch
         _uiState.update { it.copy(isFetching = true) }
         if (from == null || to == null) {
             _uiState.update { it.copy(isFetching = false) }
-            _pendingDataLoad.value = false
             return@launch
         }
         try {
@@ -335,6 +322,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun enqueueSyncAll() = viewModelScope.launch {
+        if (blockIfUserLimitReached()) return@launch
         if (isApiLimitReached()) {
             // Optionally, set a state var to trigger a UI snackbar/banner instead
             Toast.makeText(getApplication(), "API limit reached. Try again in ${getApiResetTimeHint()}", Toast.LENGTH_LONG).show()
@@ -387,6 +375,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         updateStravaConnectionState()
         refreshApiCounters()
+    }
+
+    private fun updateUserApiUsageState() {
+        val ctx = getApplication<Application>()
+        val reads15m = StravaPrefs.getUserApiReadCount15Min(ctx)
+        val reqs15m = StravaPrefs.getUserApiRequestCount15Min(ctx)
+        val readsDay = StravaPrefs.getUserApiReadCountDay(ctx)
+        val reqsDay = StravaPrefs.getUserApiRequestCountDay(ctx)
+
+        val usageString = "Usage: $reads15m/90 reads (15m), $reqs15m/180 requests (15m), $readsDay/900 reads (day), $reqsDay/1800 requests (day)"
+        val warning = StravaPrefs.isUserApiLimitNear(ctx)
+        _uiState.update { it.copy(userApiUsageString = usageString, userApiWarning = warning) }
     }
 }
 
