@@ -72,7 +72,7 @@ internal fun ActionsBottomSheet(
             onFetch = {
                 coroutineScope.launch {
                     viewModel.fetchSessions(state.dateFrom, state.dateTo)
-                    setLastActionToast("Fetched activities")
+                    setLastActionToast("Fetching activities")
                 }
                 showSheet()
             },

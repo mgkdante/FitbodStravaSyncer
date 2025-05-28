@@ -1,11 +1,11 @@
 import android.app.Application
+import android.content.SharedPreferences
 import androidx.lifecycle.AndroidViewModel
 import app.secondclass.healthsyncer.ui.settings.AppThemeMode
 import app.secondclass.healthsyncer.util.StravaPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.core.content.edit
-
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -28,11 +28,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
     val dynamicColorEnabled: StateFlow<Boolean> = _dynamicColorEnabled
 
+    // --- SharedPreferences listener for live usage updates ---
+    private val prefs: SharedPreferences = StravaPrefs.securePrefs(ctx)
+
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key in setOf(
+                StravaPrefs.KEY_USER_READS_15M,
+                StravaPrefs.KEY_USER_REQUESTS_15M,
+                StravaPrefs.KEY_USER_READS_DAY,
+                StravaPrefs.KEY_USER_REQUESTS_DAY
+            )) {
+            _apiUsageString.value = getApiUsageString()
+            _userApiWarning.value = StravaPrefs.isUserApiLimitNear(ctx)
+        }
+    }
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
+    }
+
     fun setDynamicColorEnabled(enabled: Boolean) {
         StravaPrefs.securePrefs(ctx).edit { putBoolean("dynamic_color_enabled", enabled) }
         _dynamicColorEnabled.value = enabled
     }
-
 
     fun setAppThemeMode(mode: AppThemeMode) { _appThemeMode.value = mode }
 

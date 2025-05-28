@@ -75,7 +75,7 @@ object StravaPrefs {
     fun setLastFetchEpoch(context: Context, epoch: Long) =
         securePrefs(context).edit { putLong(KEY_LAST_FETCH_EPOCH, epoch) }
 
-    fun incrementUserApiRequest(context: Context, isRead: Boolean) {
+    fun incrementUserApiRequest(context: Context, isRead: Boolean, count: Int = 1) {
         val prefs = securePrefs(context)
         val now = System.currentTimeMillis()
 
@@ -103,11 +103,11 @@ object StravaPrefs {
             putLong(KEY_USER_REQUESTS_15M_TS, quarterHourWindow)
 
             // Increment counts, rolling over as needed
-            putInt(KEY_USER_REQUESTS_DAY, dayReqCount + 1)
-            putInt(KEY_USER_REQUESTS_15M, min15ReqCount + 1)
+            putInt(KEY_USER_REQUESTS_DAY, dayReqCount + count)
+            putInt(KEY_USER_REQUESTS_15M, min15ReqCount + count)
             if (isRead) {
-                putInt(KEY_USER_READS_DAY, dayReadCount + 1)
-                putInt(KEY_USER_READS_15M, min15ReadCount + 1)
+                putInt(KEY_USER_READS_DAY, dayReadCount + count)
+                putInt(KEY_USER_READS_15M, min15ReadCount + count)
             }
         }
     }

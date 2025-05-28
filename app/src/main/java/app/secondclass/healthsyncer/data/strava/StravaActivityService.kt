@@ -1,5 +1,6 @@
 package app.secondclass.healthsyncer.data.strava
 
+import app.secondclass.healthsyncer.data.strava.StravaConstants.PER_PAGE
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.*
@@ -39,7 +40,7 @@ interface StravaActivityService {
     @GET("activities")
     suspend fun listActivities(
         @Header("Authorization") auth: String,
-        @Query("per_page") perPage: Int = 50,
+        @Query("per_page") perPage: Int = PER_PAGE,
         @Query("page") page: Int = 1,
         @Query("after") after: Long? = null,
         @Query("before") before: Long? = null

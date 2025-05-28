@@ -86,9 +86,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 // --- Update local session existence for navigation logic ---
                 _hasLocalSessions.value = list.isNotEmpty()
                 _sessionsUiState.value = when {
-                    list.isEmpty() && _uiState.value.hasFetchedOnce -> SessionsUiState.Empty
-                    list.isNotEmpty() -> SessionsUiState.Content(list.map { it.toMetrics() })
-                    else -> SessionsUiState.Loading
+                    list.isEmpty() -> SessionsUiState.Empty
+                    else -> SessionsUiState.Content(list.map { it.toMetrics() })
                 }
                 _uiState.update { it.copy(sessionMetrics = list.map { it.toMetrics() }) }
                 checkAndWarnApiLimits()
@@ -178,11 +177,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectAll(ids: List<String>) {
         _selectedIds.value = if (_selectedIds.value.containsAll(ids)) emptySet() else ids.toSet()
-    }
-
-    fun toggleDynamicColor(enabled: Boolean) {
-        prefs.edit { putBoolean(KEY_DYNAMIC_COLOR, enabled) }
-        _uiState.update { it.copy(dynamicColor = enabled) }
     }
 
     fun toggleSelection(id: String) {

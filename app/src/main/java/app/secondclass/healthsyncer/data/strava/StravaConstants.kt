@@ -9,4 +9,6 @@ object StravaConstants {
     const val REDIRECT_URI  = "myapp://strava-auth"
     const val AUTH_URL      = "https://www.strava.com/oauth/authorize"
     const val BASE_URL      = "https://www.strava.com/api/v3/"
+    const val PER_PAGE = 200
+
 }

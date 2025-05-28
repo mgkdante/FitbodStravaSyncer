@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.work.*
 import app.secondclass.healthsyncer.data.db.AppDatabase
 import app.secondclass.healthsyncer.data.strava.StravaApiClient
+import app.secondclass.healthsyncer.data.strava.StravaConstants.PER_PAGE
 import app.secondclass.healthsyncer.data.strava.StravaUploadStatusResponse
 import app.secondclass.healthsyncer.util.NotificationHelper
 import app.secondclass.healthsyncer.util.StravaPrefs
@@ -109,7 +110,7 @@ class StravaUploadWorker(
             }
 
             // --- DRY remote-check via StravaApiClient ---
-            val recentActivities = client.listAllActivities(perPage = 200)
+            val recentActivities = client.listAllActivities(perPage = PER_PAGE)
             val formatter        = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
             val sessionEpoch     = session.startTime.epochSecond
             val tolerance        = 300L // 5 min

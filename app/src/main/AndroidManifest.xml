@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+
 
     <!-- Networking -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -86,7 +89,6 @@
                 <data android:scheme="myapp" android:host="strava-auth" />
             </intent-filter>
         </activity>
-
-        <!-- REMOVE THIS: No need for StravaRedirectActivity anymore! -->
+        <receiver android:name=".worker.Reset15MinReceiver" android:exported="false"/>
     </application>
 </manifest>
