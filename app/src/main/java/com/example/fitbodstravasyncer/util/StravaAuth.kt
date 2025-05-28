@@ -17,8 +17,6 @@ object StravaPrefs {
     const val KEY_EXPIRES  = "expires_at"
     const val KEY_REQUEST_COUNT_DAY = "api_requests_day"
     const val KEY_REQUEST_COUNT_15M = "api_requests_15min"
-    const val KEY_REQUEST_TIMESTAMP_DAY = "api_requests_day_ts"
-    const val KEY_REQUEST_TIMESTAMP_15M = "api_requests_15min_ts"
     private const val MASTER_KEY_ALIAS = MasterKey.DEFAULT_MASTER_KEY_ALIAS
     const val KEY_LAST_FETCH_EPOCH = "last_strava_fetch_epoch"
     const val KEY_API_LIMIT_RESET = "api_limit_reset"
@@ -35,9 +33,44 @@ object StravaPrefs {
     const val USER_READS_DAY_LIMIT = 900
     const val USER_REQUESTS_DAY_LIMIT = 1800
 
+    const val CB_UPLOAD_LOCKED = "circuit_breaker_upload_locked"
+    const val CB_UPLOAD_FAILURES = "circuit_breaker_upload_failures"
+    const val CB_UPLOAD_LASTFAIL = "circuit_breaker_upload_lastfail"
 
-    fun getLastFetchEpoch(context: Context): Long =
-        securePrefs(context).getLong(KEY_LAST_FETCH_EPOCH, 0L)
+    private const val LAST_ERROR_NOTIFICATION = "last_error_notification"
+
+
+    fun shouldShowErrorNotification(context: Context, minIntervalMillis: Long = 10 * 60 * 1000): Boolean {
+        val prefs = securePrefs(context)
+        val last = prefs.getLong(LAST_ERROR_NOTIFICATION, 0)
+        val now = System.currentTimeMillis()
+        return (now - last) > minIntervalMillis
+    }
+
+    fun markErrorNotificationShown(context: Context) {
+        securePrefs(context).edit().putLong(LAST_ERROR_NOTIFICATION, System.currentTimeMillis()).apply()
+    }
+
+    fun setUploadCircuitBreaker(context: Context, locked: Boolean) =
+        securePrefs(context).edit { putBoolean(CB_UPLOAD_LOCKED, locked) }
+
+    fun isUploadCircuitBreakerTripped(context: Context) =
+        securePrefs(context).getBoolean(CB_UPLOAD_LOCKED, false)
+
+    fun getUploadFailureCount(context: Context) =
+        securePrefs(context).getInt(CB_UPLOAD_FAILURES, 0)
+
+    fun incrementUploadFailureCount(context: Context) =
+        securePrefs(context).edit {
+            putInt(CB_UPLOAD_FAILURES, getUploadFailureCount(context) + 1)
+            putLong(CB_UPLOAD_LASTFAIL, System.currentTimeMillis())
+        }
+
+    fun resetUploadFailureCount(context: Context) =
+        securePrefs(context).edit {
+            putInt(CB_UPLOAD_FAILURES, 0)
+            putBoolean(CB_UPLOAD_LOCKED, false)
+        }
 
     fun setLastFetchEpoch(context: Context, epoch: Long) =
         securePrefs(context).edit { putLong(KEY_LAST_FETCH_EPOCH, epoch) }

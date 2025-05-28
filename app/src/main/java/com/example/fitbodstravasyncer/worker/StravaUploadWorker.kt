@@ -59,6 +59,18 @@ class StravaUploadWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+
+        // ==== CIRCUIT BREAKER: Prevent uploads if tripped ====
+        if (StravaPrefs.isUploadCircuitBreakerTripped(ctx)) {
+            NotificationHelper.showNotification(
+                ctx,
+                "Strava Disconnected",
+                "You were logged out of Strava after repeated errors. Tap 'Reconnect' in Settings.",
+                10199
+            )
+            return@withContext Result.failure()
+        }
+
         var tcxFile: File? = null
         val client = StravaApiClient(ctx)
         try {
@@ -89,6 +101,7 @@ class StravaUploadWorker(
                     "Workout already uploaded: ${session.title}",
                     notificationId
                 )
+                StravaPrefs.resetUploadFailureCount(ctx) // reset breaker on success
                 return@withContext Result.success()
             }
 
@@ -112,6 +125,7 @@ class StravaUploadWorker(
                     "Workout already on Strava: ${session.title}",
                     notificationId
                 )
+                StravaPrefs.resetUploadFailureCount(ctx) // reset breaker on success
                 return@withContext Result.success()
             }
 
@@ -158,39 +172,22 @@ class StravaUploadWorker(
                     "Workout uploaded: ${session.title}",
                     notificationId
                 )
-                Result.success()
+                StravaPrefs.resetUploadFailureCount(ctx) // reset breaker on success
+                return@withContext Result.success()
             } else {
                 tcxFile.delete()
-                NotificationHelper.showNotification(
-                    ctx, UiStrings.STRAVA_SYNC_FAILED_TITLE,
-                    "Failed to upload workout: ${session.title}. Will retry.",
-                    2
-                )
-                Result.retry()
+                handleBreakerAndLogoutIfNeeded("Failed to upload workout: ${session.title}. Will retry.")
+                return@withContext Result.retry()
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             tcxFile?.delete()
-            NotificationHelper.showNotification(
-                ctx, UiStrings.STRAVA_DISCONNECTED_TITLE,
-                UiStrings.STRAVA_DISCONNECTED_BODY,
-                1
-            )
-            Result.failure()
-        } catch (e: Exception) {
-            tcxFile?.delete()
-            NotificationHelper.showNotification(
-                ctx, UiStrings.STRAVA_SYNC_FAILED_TITLE,
-                UiStrings.GENERIC_UPLOAD_FAILED,
-                2
-            )
-            Result.retry()
+            handleBreakerAndLogoutIfNeeded(UiStrings.STRAVA_DISCONNECTED_BODY)
+            return@withContext Result.failure()
         } catch (e: HttpException) {
             val code = e.code()
             val errorBody = e.response()?.errorBody()?.string() ?: ""
-            val ctx = applicationContext
             val msg = when (code) {
                 429 -> {
-                    // Set cool-off until the next 15-min window
                     val now = System.currentTimeMillis()
                     val min15Start = now / (15 * 60 * 1000)
                     val next15Reset = ((min15Start + 1) * 15 * 60 * 1000)
@@ -201,16 +198,44 @@ class StravaUploadWorker(
                 401 -> UiStrings.TOKEN_INVALID_EXPIRED
                 else -> "Upload failed (${code}): ${parseErrorMessage(errorBody) ?: errorBody}"
             }
-            NotificationHelper.showNotification(ctx, UiStrings.STRAVA_SYNC_FAILED_TITLE, msg, 2)
+            val isBreakerCase = (code == 401 || code == 403 || code == 429)
+            handleBreakerAndLogoutIfNeeded(msg, isBreakerCase)
             return@withContext if (code == 429) Result.retry() else Result.failure()
-    } catch (e: Exception) {
-        Result.retry()
+        } catch (e: Exception) {
+            tcxFile?.delete()
+            handleBreakerAndLogoutIfNeeded(UiStrings.GENERIC_UPLOAD_FAILED)
+            return@withContext Result.retry()
+        }
     }
 
+    // Helper to increment breaker and log out if needed
+    private fun handleBreakerAndLogoutIfNeeded(notificationMsg: String, alwaysIncrement: Boolean = true) {
+        if (StravaPrefs.shouldShowErrorNotification(ctx)) {
+            NotificationHelper.showNotification(
+                ctx,
+                "Strava Sync Failed",
+                notificationMsg,
+                2
+            )
+            StravaPrefs.markErrorNotificationShown(ctx)
+        }
+        if (alwaysIncrement) StravaPrefs.incrementUploadFailureCount(ctx)
+        if (StravaPrefs.getUploadFailureCount(ctx) >= 3) {
+            // LOG OUT user and trip breaker
+            StravaPrefs.disconnect(ctx)
+            StravaPrefs.setUploadCircuitBreaker(ctx, true)
+            NotificationHelper.showNotification(
+                ctx,
+                "Strava Disconnected",
+                "You were logged out of Strava after repeated errors. Tap 'Reconnect' in Settings.",
+                10200
+            )
+        }
     }
-
 }
+
+// (You can move this to a utils file if you want)
 private fun parseErrorMessage(errorBody: String): String? {
-    // Strava error bodies are often JSON like: {"message":"Some error","errors":[...]}
+    // Strava error bodies are often JSON like: {"message":"Some error","errors":[...]}"
     return Regex("\"message\"\\s*:\\s*\"([^\"]+)\"").find(errorBody)?.groupValues?.get(1)
 }

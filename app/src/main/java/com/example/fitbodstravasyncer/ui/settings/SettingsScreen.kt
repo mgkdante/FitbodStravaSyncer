@@ -7,7 +7,9 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.fitbodstravasyncer.util.StravaPrefs
 import com.example.fitbodstravasyncer.util.UiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,6 +29,7 @@ fun SettingsScreen(
     dynamicColorAvailable: Boolean,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val uiState = remember(apiUsageString, userApiWarning) {
         UiState(
             userApiUsageString = apiUsageString,
@@ -53,6 +56,22 @@ fun SettingsScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(32.dp)
         ) {
+            if (StravaPrefs.isUploadCircuitBreakerTripped(context)) {
+                // Show a warning banner
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Text(
+                        "You were logged out of Strava after repeated errors. Please reconnect to resume syncing.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
             SettingsStravaSection(
                 isStravaConnected = isStravaConnected,
                 uiState = uiState,
