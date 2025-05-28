@@ -1,5 +1,6 @@
 package com.example.fitbodstravasyncer.data.fitbod
 
+import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -10,13 +11,46 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import com.example.fitbodstravasyncer.data.db.HeartRateSampleEntity
 import com.example.fitbodstravasyncer.data.db.SessionEntity
 import com.example.fitbodstravasyncer.data.strava.StravaActivityResponse
+import com.example.fitbodstravasyncer.data.strava.StravaApiClient
+import com.example.fitbodstravasyncer.util.SessionMatcher
+import com.example.fitbodstravasyncer.util.safeStravaCall
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.math.abs
 
 object FitbodFetcher {
+
+    suspend fun fetchFitbodSessionsWithStrava(
+        context: Context,
+        healthClient: HealthConnectClient,
+        startInstant: Instant,
+        endInstant: Instant,
+        toleranceSeconds: Long = 300,
+        onRateLimit: (isAppLimit: Boolean) -> Unit = {},
+        onUnauthorized: () -> Unit = {},
+        onOtherError: (Throwable) -> Unit = {}
+    ): List<SessionEntity> {
+        // Fetch Strava activities robustly (with error handling)
+        val stravaActivities = safeStravaCall(
+            call = {
+                val client = StravaApiClient(context)
+                client.listAllActivities()
+            },
+            onRateLimit = onRateLimit,
+            onUnauthorized = onUnauthorized,
+            onOtherError = onOtherError
+        ) ?: return emptyList()
+
+        // Then fetch Fitbod sessions and match as before
+        return fetchFitbodSessions(
+            healthClient = healthClient,
+            startInstant = startInstant,
+            endInstant = endInstant,
+            stravaActivities = stravaActivities,
+            toleranceSeconds = toleranceSeconds
+        )
+    }
 
     suspend fun fetchFitbodSessions(
         healthClient: HealthConnectClient,
@@ -25,7 +59,6 @@ object FitbodFetcher {
         stravaActivities: List<StravaActivityResponse>,
         toleranceSeconds: Long = 300
     ): List<SessionEntity> {
-
         val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy h:mm a")
             .withZone(ZoneId.systemDefault())
 
@@ -43,20 +76,20 @@ object FitbodFetcher {
 
             val calories = healthClient.aggregate(
                 AggregateRequest(
-                    setOf(ActiveCaloriesBurnedRecord.Companion.ACTIVE_CALORIES_TOTAL),
+                    setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
                     TimeRangeFilter.Companion.between(record.startTime, record.endTime)
                 )
-            )[ActiveCaloriesBurnedRecord.Companion.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+            )[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
 
             val heartRate = healthClient.aggregate(
                 AggregateRequest(
-                    setOf(HeartRateRecord.Companion.BPM_AVG),
+                    setOf(HeartRateRecord.BPM_AVG),
                     TimeRangeFilter.Companion.between(record.startTime, record.endTime)
                 )
-            )[HeartRateRecord.Companion.BPM_AVG]?.toDouble()
+            )[HeartRateRecord.BPM_AVG]?.toDouble()
 
             val heartRateRecords = healthClient.readRecords(
-                androidx.health.connect.client.request.ReadRecordsRequest(
+                ReadRecordsRequest(
                     HeartRateRecord::class,
                     TimeRangeFilter.Companion.between(record.startTime, record.endTime)
                 )
@@ -77,12 +110,9 @@ object FitbodFetcher {
             val id = "Workout*${formatter.format(record.startTime)}"
             val sessionEpoch = record.startTime.epochSecond
 
-            // --- Strava match logic: match by start time within tolerance
+            // --- Strava match logic: match by start time within tolerance (DRY)
             val match = stravaActivities.firstOrNull { activity ->
-                activity.startDate?.let {
-                    val actEpoch = try { Instant.parse(it).epochSecond } catch (e: Exception) { null }
-                    actEpoch != null && abs(actEpoch - sessionEpoch) < toleranceSeconds
-                } == true
+                SessionMatcher.matchesSessionByTime(sessionEpoch, activity, toleranceSeconds)
             }
             val stravaId = match?.id
 

@@ -17,9 +17,11 @@ import com.example.fitbodstravasyncer.data.strava.StravaAuthService
 import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.util.ApiRateLimitUtil
 import com.example.fitbodstravasyncer.util.NotificationHelper
+import com.example.fitbodstravasyncer.util.SessionMatcher
 import com.example.fitbodstravasyncer.util.SessionMetrics
 import com.example.fitbodstravasyncer.util.StravaPrefs
 import com.example.fitbodstravasyncer.util.UiState
+import com.example.fitbodstravasyncer.util.safeStravaCall
 import com.example.fitbodstravasyncer.worker.DailySyncScheduler
 import com.example.fitbodstravasyncer.worker.StravaAutoUploadWorker
 import com.example.fitbodstravasyncer.worker.StravaUploadWorker
@@ -38,13 +40,10 @@ private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
 private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
 
-
-
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val repo =
         SessionRepository(AppDatabase.getInstance(application).sessionDao())
     private val prefs = StravaPrefs.securePrefs(application)
-    private val stravaClient = StravaApiClient(application)
     private var lastCheckMatching = 0L
 
     sealed class SessionsUiState {
@@ -53,7 +52,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         object Empty : SessionsUiState()
         data class Error(val message: String) : SessionsUiState()
     }
-
 
     private val _uiState = MutableStateFlow(
         UiState(
@@ -72,7 +70,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(stravaConnected = false) }
     }
 
-
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedIds: StateFlow<Set<String>> = _selectedIds
 
@@ -81,7 +78,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _sessionsUiState = MutableStateFlow<SessionsUiState>(SessionsUiState.Loading)
     val sessionsUiState: StateFlow<SessionsUiState> = _sessionsUiState
-
 
     init {
         loadSessions()
@@ -130,7 +126,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private var lastWarnedAt = 0L
 
-
     private fun checkAndWarnApiLimits() {
         val context = getApplication<Application>()
         val now = System.currentTimeMillis()
@@ -166,7 +161,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return ApiRateLimitUtil.getApiResetTimeHint(getApplication())
     }
 
-
     fun canTriggerCheckMatching(): Boolean {
         val now = System.currentTimeMillis()
         return now - lastCheckMatching > 15 * 60 * 1000
@@ -186,7 +180,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun selectAll(ids: List<String>) {
         _selectedIds.value = if (_selectedIds.value.containsAll(ids)) emptySet() else ids.toSet()
     }
-
 
     fun toggleDynamicColor(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_DYNAMIC_COLOR, enabled) }
@@ -244,6 +237,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(dailySync = enabled) }
     }
 
+    // ---- DRY fetchSessions using fetchFitbodSessionsWithStrava ----
     fun fetchSessions(from: LocalDate?, to: LocalDate?) = viewModelScope.launch {
         if (blockIfUserLimitReached()) return@launch
         _uiState.update { it.copy(isFetching = true) }
@@ -256,21 +250,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
             val healthClient = HealthConnectClient.getOrCreate(getApplication())
 
-            // --- Use DRY StravaApiClient ---
-            val lastFetch = StravaPrefs.getLastFetchEpoch(getApplication())
-            val stravaActivities = stravaClient.listAllActivities(
-                perPage = 200,
-                after = lastFetch,
-                before = end.epochSecond,
-                cacheLastFetch = true
-            )
-
-            // --- Fetch Fitbod sessions and match them ---
-            val sessions = FitbodFetcher.fetchFitbodSessions(
-                healthClient     = healthClient,
-                startInstant     = start,
-                endInstant       = end,
-                stravaActivities = stravaActivities
+            val sessions = FitbodFetcher.fetchFitbodSessionsWithStrava(
+                context = getApplication(),
+                healthClient = healthClient,
+                startInstant = start,
+                endInstant = end,
+                toleranceSeconds = 300,
+                onRateLimit = { isAppLimit ->
+                    Toast.makeText(getApplication(), if (isAppLimit)
+                        "App-wide Strava rate limit hit. Try again later."
+                    else
+                        "You've hit your Strava user rate limit. Wait and retry.", Toast.LENGTH_LONG).show()
+                },
+                onUnauthorized = {
+                    Toast.makeText(getApplication(), "Strava authorization expired. Please reconnect.", Toast.LENGTH_LONG).show()
+                },
+                onOtherError = { e ->
+                    Toast.makeText(getApplication(), "Strava/network error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             )
             sessions.forEach { repo.saveSession(it) }
         } catch (e: Exception) {
@@ -278,15 +275,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } finally {
             _uiState.update { it.copy(
                 isFetching = false,
-                hasFetchedOnce = true  // Set this here!
+                hasFetchedOnce = true
             ) }
             refreshApiCounters()
         }
     }
 
+    // ---- DRY restoreStravaIds with error handling ----
     fun restoreStravaIds() = viewModelScope.launch {
         try {
-            com.example.fitbodstravasyncer.data.strava.restoreStravaIds(getApplication())
+            com.example.fitbodstravasyncer.data.strava.restoreStravaIds(
+                getApplication(),
+                onRateLimit = { isAppLimit ->
+                    Toast.makeText(getApplication(), if (isAppLimit)
+                        "App-wide Strava rate limit hit. Try again later."
+                    else
+                        "You've hit your Strava user rate limit. Wait and retry.", Toast.LENGTH_LONG).show()
+                },
+                onUnauthorized = {
+                    Toast.makeText(getApplication(), "Strava authorization expired. Please reconnect.", Toast.LENGTH_LONG).show()
+                },
+                onOtherError = { e ->
+                    Toast.makeText(getApplication(), "Strava/network error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            )
         } catch (e: Exception) {
             Log.i("strava-log", e.toString())
         } finally {
@@ -300,7 +312,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val client = StravaApiClient(getApplication())
             val dao = AppDatabase.getInstance(getApplication()).sessionDao()
 
-            val stravaActivityIds = client.listAllActivities().mapNotNull { it.id }.toSet()
+            val stravaActivityIds = safeStravaCall(
+                call = { client.listAllActivities().mapNotNull { it.id } },
+                onRateLimit = { isAppLimit ->
+                    Toast.makeText(getApplication(), if (isAppLimit)
+                        "App-wide Strava rate limit hit. Try again later."
+                    else
+                        "You've hit your Strava user rate limit. Wait and retry.", Toast.LENGTH_LONG).show()
+                },
+                onUnauthorized = {
+                    Toast.makeText(getApplication(), "Strava authorization expired. Please reconnect.", Toast.LENGTH_LONG).show()
+                },
+                onOtherError = { e ->
+                    Toast.makeText(getApplication(), "Strava/network error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            ) ?: return@launch
 
             val sessionsWithStravaId = dao.getAllOnce().filter { it.stravaId != null }
             var unsyncedCount = 0
@@ -321,28 +347,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ---- DRY enqueueSyncAll using SessionMatcher and safeStravaCall ----
     fun enqueueSyncAll() = viewModelScope.launch {
         if (blockIfUserLimitReached()) return@launch
         if (isApiLimitReached()) {
-            // Optionally, set a state var to trigger a UI snackbar/banner instead
             Toast.makeText(getApplication(), "API limit reached. Try again in ${getApiResetTimeHint()}", Toast.LENGTH_LONG).show()
             return@launch
         }
 
         val client = StravaApiClient(getApplication())
-        val recentActivities = client.listAllActivities()
+        val recentActivities = safeStravaCall(
+            call = { client.listAllActivities() },
+            onRateLimit = { isAppLimit ->
+                Toast.makeText(getApplication(), if (isAppLimit)
+                    "App-wide Strava rate limit hit. Try again later."
+                else
+                    "You've hit your Strava user rate limit. Wait and retry.", Toast.LENGTH_LONG).show()
+            },
+            onUnauthorized = {
+                Toast.makeText(getApplication(), "Strava authorization expired. Please reconnect.", Toast.LENGTH_LONG).show()
+            },
+            onOtherError = { e ->
+                Toast.makeText(getApplication(), "Strava/network error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        ) ?: return@launch
 
         _uiState.value.sessionMetrics
             .filter { it.stravaId == null }
             .forEach { session ->
-                val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
                 val sessionStartEpoch = session.startTime.epochSecond
                 val tolerance = 300L // 5 min
                 val matching = recentActivities.firstOrNull { activity ->
-                    activity.startDate?.let {
-                        val actEpoch = Instant.from(formatter.parse(it)).epochSecond
-                        abs(actEpoch - sessionStartEpoch) < tolerance
-                    } == true
+                    SessionMatcher.matchesSessionByTime(sessionStartEpoch, activity, tolerance)
                 }
                 if (matching != null) {
                     AppDatabase.getInstance(getApplication()).sessionDao()
@@ -382,7 +418,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val reads15m = StravaPrefs.getUserApiReadCount15Min(ctx)
         val reqs15m = StravaPrefs.getUserApiRequestCount15Min(ctx)
         val readsDay = StravaPrefs.getUserApiReadCountDay(ctx)
-        val reqsDay = StravaPrefs.getUserApiRequestCountDay(ctx)
+        val reqsDay = StravaPrefs.getApiRequestCountDay(ctx)
 
         val usageString = "Usage: $reads15m/90 reads (15m), $reqs15m/180 requests (15m), $readsDay/900 reads (day), $reqsDay/1800 requests (day)"
         val warning = StravaPrefs.isUserApiLimitNear(ctx)

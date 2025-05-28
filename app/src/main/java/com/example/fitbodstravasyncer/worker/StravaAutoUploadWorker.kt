@@ -3,17 +3,9 @@ package com.example.fitbodstravasyncer.worker
 import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
-import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
+import androidx.work.*
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
-import com.example.fitbodstravasyncer.data.strava.StravaApiClient
 import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.util.ApiRateLimitUtil
 import com.example.fitbodstravasyncer.util.NotificationHelper
@@ -32,10 +24,9 @@ class StravaAutoUploadWorker(
         private const val TAG = "STRAVA-auto"
         const val WORK_NAME = "auto_strava_upload"
 
-
         fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME, // use constant here
+                WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<StravaAutoUploadWorker>(15, TimeUnit.MINUTES)
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 5, TimeUnit.MINUTES)
@@ -45,7 +36,6 @@ class StravaAutoUploadWorker(
                             .build()
                     )
                     .build()
-
             )
         }
 
@@ -75,6 +65,7 @@ class StravaAutoUploadWorker(
             )
             return@withContext Result.retry()
         }
+
         try {
             val context = applicationContext
             val dao = AppDatabase.getInstance(context).sessionDao()
@@ -82,43 +73,55 @@ class StravaAutoUploadWorker(
             val nowInstant = Instant.now()
             val startInstant = nowInstant.minusSeconds(24 * 3600)
 
-            // Only call Health Connect first
-            val newSessions = FitbodFetcher.fetchFitbodSessions(
-                healthClient,
-                startInstant,
-                nowInstant,
-                emptyList() // pass empty Strava list, just want raw Fitbod
+            // DRY: Fetch and match sessions with Strava in one call
+            val matchedSessions = FitbodFetcher.fetchFitbodSessionsWithStrava(
+                context = context,
+                healthClient = healthClient,
+                startInstant = startInstant,
+                endInstant = nowInstant,
+                toleranceSeconds = 300,
+                onRateLimit = { isAppLimit ->
+                    NotificationHelper.showNotification(
+                        applicationContext,
+                        "Strava API Rate Limit",
+                        if (isAppLimit)
+                            "App-wide Strava rate limit hit. Auto-sync paused."
+                        else
+                            "Your Strava user rate limit hit. Auto-sync paused.",
+                        10201
+                    )
+                },
+                onUnauthorized = {
+                    NotificationHelper.showNotification(
+                        applicationContext,
+                        "Strava Login Required",
+                        "Auto-sync paused: Please reconnect Strava in the app.",
+                        10202
+                    )
+                },
+                onOtherError = { e ->
+                    NotificationHelper.showNotification(
+                        applicationContext,
+                        "Auto-sync failed",
+                        "Network or API error: ${e.message}",
+                        10203
+                    )
+                }
             )
 
             // Check if there are new sessions not already in the DB
             val existingSessions = dao.getAllOnce().map { it.id }.toSet()
-            val trulyNewSessions = newSessions.filter { it.id !in existingSessions }
+            val trulyNewSessions = matchedSessions.filter { it.id !in existingSessions }
 
             if (trulyNewSessions.isEmpty()) {
-                // Nothing new: NO STRAVA API CALLS at all!
+                // Nothing new: NO Strava upload calls at all!
                 return@withContext Result.success()
             }
 
-            // Only proceed with Strava API if new sessions found
-            // Now fetch Strava activities
-            val client = StravaApiClient(context)
-            val stravaActivities = client.listAllActivities()
-
-            // Update any sessions that match existing Strava activities (avoid duplicates)
-            val sessionsToInsert = trulyNewSessions.map { session ->
-                val match = stravaActivities.firstOrNull { activity ->
-                    activity.startDate?.let {
-                        val actEpoch = try { Instant.parse(it).epochSecond } catch (e: Exception) { null }
-                        actEpoch != null && kotlin.math.abs(actEpoch - session.startTime.epochSecond) < 300
-                    } == true
-                }
-                if (match?.id != null) session.copy(stravaId = match.id) else session
-            }
-
-            sessionsToInsert.forEach { dao.insert(it) }
+            trulyNewSessions.forEach { dao.insert(it) }
 
             // Only upload sessions not already matched to Strava
-            val toUpload = sessionsToInsert.filter { it.stravaId == null }
+            val toUpload = trulyNewSessions.filter { it.stravaId == null }
             if (toUpload.isNotEmpty()) {
                 toUpload.forEach { session ->
                     StravaUploadWorker.enqueue(context, session.id)
@@ -132,10 +135,14 @@ class StravaAutoUploadWorker(
             }
             Result.success()
         } catch (e: Exception) {
-            Log.e("STRAVA-auto", "Auto-sync failed", e)
+            Log.e(TAG, "Auto-sync failed", e)
+            NotificationHelper.showNotification(
+                applicationContext,
+                "Auto-sync failed",
+                "An unexpected error occurred: ${e.message}",
+                10299
+            )
             Result.retry()
         }
     }
-
-
 }
