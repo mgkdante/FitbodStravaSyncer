@@ -29,20 +29,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import kotlin.math.abs
 
 private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
 private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo =
-        SessionRepository(AppDatabase.getInstance(application).sessionDao())
+    private val repo = SessionRepository(AppDatabase.getInstance(application).sessionDao())
     private val prefs = StravaPrefs.securePrefs(application)
     private var lastCheckMatching = 0L
 
@@ -65,11 +60,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     )
     val uiState: StateFlow<UiState> = _uiState
 
-    fun disconnectStrava() {
-        StravaPrefs.disconnect(getApplication())
-        _uiState.update { it.copy(stravaConnected = false) }
-    }
-
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedIds: StateFlow<Set<String>> = _selectedIds
 
@@ -79,23 +69,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _sessionsUiState = MutableStateFlow<SessionsUiState>(SessionsUiState.Loading)
     val sessionsUiState: StateFlow<SessionsUiState> = _sessionsUiState
 
+    // --- THIS IS THE NEW STATE FOR NAVIGATION LOGIC ---
+    private val _hasLocalSessions = MutableStateFlow(false)
+    val hasLocalSessions: StateFlow<Boolean> = _hasLocalSessions
+
     init {
         loadSessions()
         refreshApiCounters()
         updateUserApiUsageState()
     }
 
-    private fun blockIfUserLimitReached(): Boolean {
-        if (StravaPrefs.isUserApiLimitReached(getApplication())) {
-            Toast.makeText(getApplication(), "You've hit your personal Strava API usage limit. Please try again in 15 minutes.", Toast.LENGTH_LONG).show()
-            return true
-        }
-        return false
-    }
-
     private fun loadSessions() = viewModelScope.launch {
         try {
             repo.allSessions().collect { list ->
+                // --- Update local session existence for navigation logic ---
+                _hasLocalSessions.value = list.isNotEmpty()
                 _sessionsUiState.value = when {
                     list.isEmpty() && _uiState.value.hasFetchedOnce -> SessionsUiState.Empty
                     list.isNotEmpty() -> SessionsUiState.Content(list.map { it.toMetrics() })
@@ -108,6 +96,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _sessionsUiState.value = SessionsUiState.Error(e.localizedMessage ?: "Unknown error loading sessions")
             Log.e("HomeViewModel", "Error loading sessions", e)
         }
+    }
+
+    private fun blockIfUserLimitReached(): Boolean {
+        if (StravaPrefs.isUserApiLimitReached(getApplication())) {
+            Toast.makeText(getApplication(), "You've hit your personal Strava API usage limit. Please try again in 15 minutes.", Toast.LENGTH_LONG).show()
+            return true
+        }
+        return false
     }
 
     private fun refreshApiCounters() {
@@ -237,7 +233,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(dailySync = enabled) }
     }
 
-    // ---- DRY fetchSessions using fetchFitbodSessionsWithStrava ----
     fun fetchSessions(from: LocalDate?, to: LocalDate?) = viewModelScope.launch {
         if (blockIfUserLimitReached()) return@launch
         _uiState.update { it.copy(isFetching = true) }
@@ -247,7 +242,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         try {
             val start = from.atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val end   = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
+            val end = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
             val healthClient = HealthConnectClient.getOrCreate(getApplication())
 
             val sessions = FitbodFetcher.fetchFitbodSessionsWithStrava(
@@ -281,7 +276,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ---- DRY restoreStravaIds with error handling ----
     fun restoreStravaIds() = viewModelScope.launch {
         try {
             com.example.fitbodstravasyncer.data.strava.restoreStravaIds(
@@ -306,7 +300,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Check all synced workouts and unsync if deleted on Strava */
     fun unsyncIfStravaDeleted() = viewModelScope.launch {
         try {
             val client = StravaApiClient(getApplication())
@@ -347,7 +340,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ---- DRY enqueueSyncAll using SessionMatcher and safeStravaCall ----
     fun enqueueSyncAll() = viewModelScope.launch {
         if (blockIfUserLimitReached()) return@launch
         if (isApiLimitReached()) {

@@ -1,5 +1,6 @@
 package com.example.fitbodstravasyncer.ui.settings
 
+import SettingsHealthConnectSection
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -13,6 +14,9 @@ import com.example.fitbodstravasyncer.util.UiState
 @Composable
 fun SettingsScreen(
     isStravaConnected: Boolean,
+    hasHealthPermissions: Boolean, // NEW
+    onRequestHealthPermissions: () -> Unit, // NEW
+    onConnectStrava: (() -> Unit)? = null, // NEW
     apiUsageString: String,
     userApiWarning: Boolean,
     onDisconnectStrava: () -> Unit,
@@ -52,7 +56,12 @@ fun SettingsScreen(
             SettingsStravaSection(
                 isStravaConnected = isStravaConnected,
                 uiState = uiState,
-                onDisconnectStrava = onDisconnectStrava
+                onDisconnectStrava = onDisconnectStrava,
+                onConnectStrava = onConnectStrava
+            )
+            SettingsHealthConnectSection(
+                hasHealthPermissions = hasHealthPermissions,
+                onRequestHealthPermissions = onRequestHealthPermissions
             )
             SettingsThemeSection(
                 appThemeMode = appThemeMode,

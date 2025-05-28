@@ -1,3 +1,5 @@
+// MainActivityContent.kt
+
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
@@ -20,31 +22,26 @@ import com.example.fitbodstravasyncer.ui.util.OnResumeEffect
 import com.example.fitbodstravasyncer.ui.util.PermissionAndAuthEffects
 import com.example.fitbodstravasyncer.ui.util.rememberPermissionLauncher
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainActivityContent(
     viewModel: HomeViewModel,
     healthConnectClient: HealthConnectClient
 ) {
-    // --- Navigation setup ---
     val navController = rememberNavController()
     val settingsViewModel: SettingsViewModel = viewModel()
 
-    // --- Settings state (collect ONCE here, not per-composable!) ---
     val appThemeMode by settingsViewModel.appThemeMode.collectAsState()
     val isStravaConnected by settingsViewModel.isStravaConnected.collectAsState()
     val apiUsageString by settingsViewModel.apiUsageString.collectAsState()
     val userApiWarning by settingsViewModel.userApiWarning.collectAsState()
 
-    // --- Compute darkTheme based on appThemeMode ---
     val darkTheme = when (appThemeMode) {
         AppThemeMode.SYSTEM -> isSystemInDarkTheme()
         AppThemeMode.LIGHT -> false
         AppThemeMode.DARK -> true
     }
 
-    // --- Permissions and state ---
     val permissions = remember {
         setOf(
             androidx.health.connect.client.permission.HealthPermission.getReadPermission(
@@ -61,21 +58,17 @@ fun MainActivityContent(
     }
     var permissionsChecked by remember { mutableStateOf(false) }
     var hasHealthPermissions by remember { mutableStateOf(false) }
-    var refreshKey by remember { mutableStateOf(0) }
 
     val dynamicColorEnabled by settingsViewModel.dynamicColorEnabled.collectAsState()
     val dynamicColorAvailable = remember { android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S }
 
-    // --- Permission launcher ---
     val permissionLauncher = rememberPermissionLauncher(
         permissions = permissions,
         onPermissionsResult = { granted ->
             hasHealthPermissions = granted.containsAll(permissions)
-            refreshKey++
         }
     )
 
-    // --- Strava Auth launcher ---
     val stravaAuthLauncher = rememberStravaAuthLauncher(
         onAuthCodeReceived = { code ->
             viewModel.launchExchangeStravaCode(code)
@@ -83,7 +76,6 @@ fun MainActivityContent(
         }
     )
 
-    // --- Effects ---
     PermissionAndAuthEffects(
         healthConnectClient = healthConnectClient,
         permissions = permissions,
@@ -96,13 +88,19 @@ fun MainActivityContent(
         settingsViewModel.refreshState()
     }
 
+    // NEW: track if local sessions exist
+    val hasLocalSessions by viewModel.hasLocalSessions.collectAsState()
+
     FitbodStravaSyncerTheme(
         darkTheme = darkTheme,
-        dynamicColor = dynamicColorEnabled && dynamicColorAvailable) {
+        dynamicColor = dynamicColorEnabled && dynamicColorAvailable
+    ) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (!permissionsChecked) {
                 LoadingProgressIndicator()
-            } else if (!hasHealthPermissions || !isStravaConnected) {
+            }
+            // --- UPDATED LOGIC: Only show AuthScreen if BOTH missing AND no local data ---
+            else if ((!hasHealthPermissions || !isStravaConnected) && !hasLocalSessions) {
                 AuthScreen(
                     hasHealthPermissions = hasHealthPermissions,
                     onRequestHealthPermissions = { permissionLauncher.launch(permissions) },
@@ -120,6 +118,9 @@ fun MainActivityContent(
                     composable("settings") {
                         SettingsScreen(
                             isStravaConnected = isStravaConnected,
+                            hasHealthPermissions = hasHealthPermissions,
+                            onRequestHealthPermissions = { permissionLauncher.launch(permissions) },
+                            onConnectStrava = { launchStravaAuthFlow(stravaAuthLauncher) },
                             apiUsageString = apiUsageString,
                             userApiWarning = userApiWarning,
                             appThemeMode = appThemeMode,
