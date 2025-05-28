@@ -80,7 +80,7 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Fitbod → Strava") },
+                title = { Text(UiStrings.APP_BAR_TITLE) },
                 actions = {
                     FilterAndThemeDropdown(
                         currentFilter = syncFilter,
@@ -326,7 +326,7 @@ fun FilterAndThemeDropdown(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
-            SyncFilter.values().forEach { filter ->
+            SyncFilter.entries.forEach { filter ->
                 DropdownMenuItem(
                     text = { Text(filter.label, modifier = Modifier.padding(vertical = 4.dp)) },
                     onClick = { onFilterChange(filter) }, // Do NOT close dropdown
@@ -335,7 +335,7 @@ fun FilterAndThemeDropdown(
                         if (currentFilter == filter) {
                             Icon(
                                 Icons.Default.Check,
-                                contentDescription = "Selected",
+                                contentDescription = UiStrings.SELECTED,
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -363,7 +363,7 @@ fun FilterAndThemeDropdown(
                         if (currentTheme == value) {
                             Icon(
                                 Icons.Default.Check,
-                                contentDescription = "Selected",
+                                contentDescription = UiStrings.SELECTED,
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }

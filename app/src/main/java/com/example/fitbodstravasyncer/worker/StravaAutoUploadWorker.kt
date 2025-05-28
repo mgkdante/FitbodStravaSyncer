@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
 import com.example.fitbodstravasyncer.data.strava.StravaApiClient
+import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.util.ApiRateLimitUtil
 import com.example.fitbodstravasyncer.util.NotificationHelper
 import com.example.fitbodstravasyncer.util.StravaPrefs
@@ -87,7 +88,7 @@ class StravaAutoUploadWorker(
                 }
                 NotificationHelper.showNotification(
                     applicationContext,
-                    "Auto Strava Sync",
+                    UiStrings.AUTO_SYNC_NOTIFICATION_TITLE,
                     "${unsyncedSessions.size} new Fitbod session(s) uploaded to Strava.",
                     10125
                 )

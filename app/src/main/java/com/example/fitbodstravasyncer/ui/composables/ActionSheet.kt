@@ -187,12 +187,12 @@ fun ActionsSheet(
 
         DatePickerRow(
             label = UiStrings.DATE_FROM,
-            value = state.dateFrom?.format(dateFormatter) ?: "Not set",
+            value = state.dateFrom?.format(dateFormatter) ?: UiStrings.NOT_SET,
             onClick = { showDatePickerFrom = true }
         )
         DatePickerRow(
             label = UiStrings.DATE_TO,
-            value = state.dateTo?.format(dateFormatter) ?: "Not set",
+            value = state.dateTo?.format(dateFormatter) ?: UiStrings.NOT_SET,
             onClick = { showDatePickerTo = true }
         )
 
@@ -349,7 +349,7 @@ fun SyncActionsSection(
             enabled = !state.apiLimitReached,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Check Matching")
+            Text(UiStrings.CHECK_MATCHING_BUTTON)
         }
         Button(
             onClick = onFetch,

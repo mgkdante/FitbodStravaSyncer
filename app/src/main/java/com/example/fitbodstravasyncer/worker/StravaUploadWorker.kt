@@ -7,6 +7,7 @@ import androidx.work.*
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.strava.StravaApiClient
 import com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
+import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.util.NotificationHelper
 import com.example.fitbodstravasyncer.util.StravaPrefs
 import com.example.fitbodstravasyncer.util.TcxFileGenerator
@@ -38,11 +39,11 @@ class StravaUploadWorker(
 
         fun enqueue(context: Context, sessionId: String?) {
             if (sessionId.isNullOrBlank()) {
-                Toast.makeText(context, "Invalid session for sync.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, UiStrings.INVALID_SESSION_FOR_SYNC, Toast.LENGTH_SHORT).show()
                 return
             }
             if (!context.isStravaConnected()) {
-                Toast.makeText(context, "Connect Strava first", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, UiStrings.CONNECT_STRAVA_FIRST, Toast.LENGTH_SHORT).show()
                 return
             }
             val inputData = workDataOf("SESSION_ID" to sessionId)
@@ -76,7 +77,7 @@ class StravaUploadWorker(
             val notificationId = session.id.hashCode()
             NotificationHelper.showNotification(
                 ctx,
-                "Syncing to Strava",
+                UiStrings.SYNCING_TO_STRAVA_TITLE,
                 "Uploading workout: ${session.title}…",
                 notificationId
             )
@@ -84,7 +85,7 @@ class StravaUploadWorker(
             // Already locally marked?
             if (session.stravaId != null) {
                 NotificationHelper.showNotification(
-                    ctx, "Strava Sync Complete",
+                    ctx, UiStrings.STRAVA_SYNC_COMPLETE_TITLE,
                     "Workout already uploaded: ${session.title}",
                     notificationId
                 )
@@ -107,7 +108,7 @@ class StravaUploadWorker(
             if (matching != null) {
                 matching.id?.let { dao.updateStravaId(session.id, it) }
                 NotificationHelper.showNotification(
-                    ctx, "Strava Sync Complete",
+                    ctx, UiStrings.STRAVA_SYNC_COMPLETE_TITLE,
                     "Workout already on Strava: ${session.title}",
                     notificationId
                 )
@@ -153,7 +154,7 @@ class StravaUploadWorker(
                 dao.updateStravaId(sessionId, status.activity_id)
                 tcxFile.delete()
                 NotificationHelper.showNotification(
-                    ctx, "Strava Sync Complete",
+                    ctx, UiStrings.STRAVA_SYNC_COMPLETE_TITLE,
                     "Workout uploaded: ${session.title}",
                     notificationId
                 )
@@ -161,7 +162,7 @@ class StravaUploadWorker(
             } else {
                 tcxFile.delete()
                 NotificationHelper.showNotification(
-                    ctx, "Strava Sync Failed",
+                    ctx, UiStrings.STRAVA_SYNC_FAILED_TITLE,
                     "Failed to upload workout: ${session.title}. Will retry.",
                     2
                 )
@@ -170,16 +171,16 @@ class StravaUploadWorker(
         } catch (e: kotlinx.coroutines.CancellationException) {
             tcxFile?.delete()
             NotificationHelper.showNotification(
-                ctx, "Strava Disconnected",
-                "Please reconnect your Strava account to continue syncing.",
+                ctx, UiStrings.STRAVA_DISCONNECTED_TITLE,
+                UiStrings.STRAVA_DISCONNECTED_BODY,
                 1
             )
             Result.failure()
         } catch (e: Exception) {
             tcxFile?.delete()
             NotificationHelper.showNotification(
-                ctx, "Strava Sync Failed",
-                "Failed to upload workout. Will retry.",
+                ctx, UiStrings.STRAVA_SYNC_FAILED_TITLE,
+                UiStrings.GENERIC_UPLOAD_FAILED,
                 2
             )
             Result.retry()
@@ -197,10 +198,10 @@ class StravaUploadWorker(
                     "API rate limit hit. Try again in ${(next15Reset - now) / 60000}m."
                 }
                 400 -> "Upload failed: ${parseErrorMessage(errorBody) ?: "Bad file or data"}"
-                401 -> "Token invalid/expired. Please reconnect Strava."
+                401 -> UiStrings.TOKEN_INVALID_EXPIRED
                 else -> "Upload failed (${code}): ${parseErrorMessage(errorBody) ?: errorBody}"
             }
-            NotificationHelper.showNotification(ctx, "Strava Sync Failed", msg, 2)
+            NotificationHelper.showNotification(ctx, UiStrings.STRAVA_SYNC_FAILED_TITLE, msg, 2)
             return@withContext if (code == 429) Result.retry() else Result.failure()
     } catch (e: Exception) {
         Result.retry()

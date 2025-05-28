@@ -14,6 +14,7 @@ import com.example.fitbodstravasyncer.data.db.SessionRepository
 import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
 import com.example.fitbodstravasyncer.data.strava.StravaApiClient
 import com.example.fitbodstravasyncer.data.strava.StravaAuthService
+import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.util.ApiRateLimitUtil
 import com.example.fitbodstravasyncer.util.NotificationHelper
 import com.example.fitbodstravasyncer.util.SessionMetrics
@@ -104,11 +105,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val now = System.currentTimeMillis()
         if (StravaPrefs.isApiLimitNear(context) && now - lastWarnedAt > 60 * 1000) {
             lastWarnedAt = now
-            Toast.makeText(context, "Strava API limit nearly reached! The app will try again later.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, UiStrings.STRAVA_API_LIMIT_NEARLY_REACHED, Toast.LENGTH_LONG).show()
             NotificationHelper.showNotification(
                 context,
-                "API Limit Warning",
-                "The app is close to the Strava API request limit. It will try again later.",
+                UiStrings.STRAVA_API_LIMIT_WARNING,
+                UiStrings.STRAVA_API_LIMIT_BODY,
                 9999
             )
         }
@@ -116,7 +117,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             Toast.makeText(context, "Strava API limit reached. Try again in ${getApiResetTimeHint()}.", Toast.LENGTH_LONG).show()
             NotificationHelper.showNotification(
                 context,
-                "API Limit Reached",
+                UiStrings.STRAVA_API_LIMIT_REACHED,
                 "No more uploads until ${getApiResetTimeHint()}",
                 10000
             )

@@ -1,7 +1,15 @@
 package com.example.fitbodstravasyncer.ui
 
 object UiStrings {
-    // Permissions & Onboarding
+    // --- App Title / Headings ---
+    const val APP_BAR_TITLE = "Fitbod → Strava"
+
+    // --- Generic Labels & UI Controls ---
+    const val CHECK_MATCHING_BUTTON = "Check Matching"
+    const val NOT_SET = "Not set"
+    const val SELECTED = "Selected"
+
+    // --- Permissions & Onboarding ---
     const val WHY_THIS_PERMISSION = "Why this permission?"
     const val PERMISSION_DESC = "This app needs access to your Health Connect data to read workouts, calories, and heart rate.\n\nWe only use this data to sync your Fitbod sessions with Strava."
     const val ALLOW = "Allow"
@@ -13,13 +21,13 @@ object UiStrings {
     const val STEP2_BTN = "Connect Strava"
     const val SETUP_COMPLETE = "Setup complete! Entering app…"
 
-    // ActionsSheet & Controls
+    // --- ActionsSheet & Controls ---
     const val ACTIONS = "Actions"
     const val DATE_FROM = "Date From"
     const val DATE_TO = "Date To"
     const val PICK = "Pick"
 
-    // Control help titles/descriptions
+    // --- Control help titles/descriptions ---
     const val FETCH_WORKOUTS_TITLE = "Fetch Workouts"
     const val FETCH_WORKOUTS_DESC = "Fetches Fitbod workouts between the selected dates."
     const val FETCH_FITBOD_BTN = "Fetch Fitbod Workouts"
@@ -42,7 +50,7 @@ object UiStrings {
     const val DELETE_ALL_DESC = "Deletes all workout sessions from the list. Does not delete from Strava neither Fitbod just on this App"
     const val DELETE_ALL_BTN = "Delete All Activities"
 
-    // Dialogs
+    // --- Dialogs ---
     const val CONFIRM_DELETE_TITLE = "Confirm Delete"
     const val CONFIRM_DELETE_TEXT = "Delete %d sessions?"
     const val CONFIRM_DELETE_ALL_TITLE = "Confirm Delete All"
@@ -53,7 +61,7 @@ object UiStrings {
     const val CANCEL = "Cancel"
     const val HELP = "Help"
 
-    // MainScreen/Filters/Themes
+    // --- MainScreen/Filters/Themes ---
     const val FILTER_ACTIVITIES = "Filter Activities"
     const val APP_THEME = "App Theme"
     const val THEME_LIGHT = "Theme: Light"
@@ -63,15 +71,15 @@ object UiStrings {
     const val MENU = "Menu"
     const val MORE_ACTIONS = "More Actions"
 
-    // FABs
+    // --- FABs ---
     const val SYNC_SELECTED = "Sync Selected"
     const val DELETE_SELECTED = "Delete Selected"
 
-    // Home Screen empty state
+    // --- Home Screen empty state ---
     const val NO_ACTIVITIES_ICON_DESC = "No activities"
     const val NO_ACTIVITIES = "No activities fetched"
 
-    // SessionCard
+    // --- SessionCard ---
     const val SYNCED = "Synced"
     const val NOT_SYNCED = "Not Synced"
     const val DURATION = "Duration"
@@ -81,21 +89,43 @@ object UiStrings {
     const val KCAL = "kcal"
     const val BPM = "bpm"
 
-    // Chart
+    // --- Chart ---
     const val NOT_ENOUGH_HR = "Not enough heart rate data for chart."
 
-    // API & Error banners
+    // --- API & Error banners ---
     const val API_LIMIT_REACHED_BANNER = "API limit reached. Try again in %s"
 
-    // Notifications (optional, for in-app toast/snackbars)
-    const val DELETED_SESSIONS = "Deleted %d sessions"
-    const val ALL_SESSIONS_DELETED = "All sessions deleted"
-    const val FETCHED_ACTIVITIES = "Fetched activities"
-    const val MATCHING_CHECKED = "Matching Strava workouts checked"
-    const val WAIT_BETWEEN_CHECKS = "Please wait 15 minutes between checks."
-    const val SYNC_ALL_REQUESTED = "Sync all requested"
-    const val ALREADY_SYNCED = "Already synced"
-    const val SYNCING_WORKOUTS = "Syncing %d workout(s) to Strava"
+    // --- Notifications & Toasts ---
+    const val STRAVA_API_LIMIT_NEARLY_REACHED = "Strava API limit nearly reached! The app will try again later."
+    const val STRAVA_API_LIMIT_WARNING = "API Limit Warning"
+    const val STRAVA_API_LIMIT_BODY = "The app is close to the Strava API request limit. It will try again later."
+    const val STRAVA_API_LIMIT_REACHED = "API Limit Reached"
+    const val STRAVA_API_LIMIT_REACHED_BODY = "No more uploads until %s"
+    const val DAILY_SYNC_NOTIFICATION_TITLE = "Daily Strava Sync"
+    const val DAILY_SYNC_NOTIFICATION_BODY = "Your Fitbod sessions have been checked against Strava."
+    const val AUTO_SYNC_NOTIFICATION_TITLE = "Auto Strava Sync"
+    const val AUTO_SYNC_NOTIFICATION_BODY = "%d new Fitbod session(s) uploaded to Strava."
+    const val SYNCING_TO_STRAVA_TITLE = "Syncing to Strava"
+    const val SYNCING_TO_STRAVA_BODY = "Uploading workout: %s…"
+    const val STRAVA_SYNC_COMPLETE_TITLE = "Strava Sync Complete"
+    const val WORKOUT_ALREADY_UPLOADED = "Workout already uploaded: %s"
+    const val WORKOUT_ALREADY_ON_STRAVA = "Workout already on Strava: %s"
+    const val WORKOUT_UPLOADED = "Workout uploaded: %s"
+    const val STRAVA_SYNC_FAILED_TITLE = "Strava Sync Failed"
+    const val WORKOUT_UPLOAD_FAILED = "Failed to upload workout: %s. Will retry."
+    const val GENERIC_UPLOAD_FAILED = "Failed to upload workout. Will retry."
+    const val API_RATE_LIMIT_HIT = "API rate limit hit. Try again in %sm."
+    const val UPLOAD_FAILED = "Upload failed: %s"
+    const val TOKEN_INVALID_EXPIRED = "Token invalid/expired. Please reconnect Strava."
+    const val STRAVA_DISCONNECTED_TITLE = "Strava Disconnected"
+    const val STRAVA_DISCONNECTED_BODY = "Please reconnect your Strava account to continue syncing."
+
+    // --- Other Errors and Info ---
+    const val INVALID_SESSION_FOR_SYNC = "Invalid session for sync."
     const val CONNECT_STRAVA_FIRST = "Connect Strava first"
-    const val INVALID_SESSION_SYNC = "Invalid session for sync."
+
+    // --- Dynamic (format) examples ---
+    // Use with String.format(UiStrings.WORKOUT_UPLOADED, session.title)
+    // Use with String.format(UiStrings.WORKOUT_UPLOAD_FAILED, session.title)
+    // Use with String.format(UiStrings.API_LIMIT_REACHED_BANNER, apiLimitResetHint)
 }
