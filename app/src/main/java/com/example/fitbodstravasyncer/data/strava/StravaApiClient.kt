@@ -2,6 +2,7 @@ package com.example.fitbodstravasyncer.data.strava
 
 import android.content.Context
 import com.example.fitbodstravasyncer.core.network.RetrofitProvider
+import com.example.fitbodstravasyncer.util.StravaPrefs
 import com.example.fitbodstravasyncer.util.StravaTokenManager
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -20,7 +21,13 @@ class StravaApiClient(private val context: Context) {
     /**
      * Combines all pages into a single list.
      */
-    suspend fun listAllActivities(perPage: Int = 200, after: Long? = null, before: Long? = null): List<StravaActivityResponse> {
+    suspend fun listAllActivities(
+        perPage: Int = 200,
+        after: Long? = null,
+        before: Long? = null,
+        cacheLastFetch: Boolean = false
+    ): List<StravaActivityResponse> {
+        StravaPrefs.incrementApiRequestCount(context)
         val token = getAuthToken()
         val all = mutableListOf<StravaActivityResponse>()
         var page = 1
@@ -30,8 +37,18 @@ class StravaApiClient(private val context: Context) {
             all += batch
             page++
         }
+        // Update last fetch epoch
+        if (cacheLastFetch && all.isNotEmpty()) {
+            val maxEpoch = all.mapNotNull { it.startDate }
+                .mapNotNull { runCatching { java.time.Instant.parse(it).epochSecond }.getOrNull() }
+                .maxOrNull()
+            if (maxEpoch != null) {
+                StravaPrefs.setLastFetchEpoch(context, maxEpoch)
+            }
+        }
         return all
     }
+
 
 
     /**
@@ -43,6 +60,7 @@ class StravaApiClient(private val context: Context) {
         after: Long? = null,
         before: Long? = null
     ): List<StravaActivityResponse> {
+        StravaPrefs.incrementApiRequestCount(context)
         val token = getAuthToken()
         return api.listActivities(token, perPage, page, after, before)
     }
@@ -56,6 +74,7 @@ class StravaApiClient(private val context: Context) {
         name: RequestBody,
         description: RequestBody
     ): StravaUploadResponse {
+        StravaPrefs.incrementApiRequestCount(context)
         val token = getAuthToken()
         return api.uploadActivity(
             auth        = token,
@@ -71,6 +90,7 @@ class StravaApiClient(private val context: Context) {
     suspend fun getUploadStatus(
         uploadId: Long
     ): StravaUploadStatusResponse {
+        StravaPrefs.incrementApiRequestCount(context)
         val token = getAuthToken()
         return api.getUploadStatus(token, uploadId)
     }
@@ -79,6 +99,7 @@ class StravaApiClient(private val context: Context) {
     suspend fun getActivity(
         activityId: Long
     ): StravaActivityResponse {
+        StravaPrefs.incrementApiRequestCount(context)
         val token = getAuthToken()
         return api.getActivity(token, activityId)
     }

@@ -27,7 +27,9 @@ data class UiState(
     val dateFrom: LocalDate? = null,
     val dateTo: LocalDate? = null,
     val isFetching: Boolean = false,
-    val dynamicColor: Boolean = true
+    val dynamicColor: Boolean = true,
+    val apiRequestsDay: Int = 0,
+    val apiRequests15Min: Int = 0,
 
 )
 

@@ -1,5 +1,6 @@
 package com.example.fitbodstravasyncer.ui.home
 
+import SessionCardWithCheckbox
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
@@ -31,7 +32,6 @@ import com.example.fitbodstravasyncer.ui.composables.ActionsSheet
 import com.example.fitbodstravasyncer.ui.composables.AnimatedFab
 import com.example.fitbodstravasyncer.ui.composables.ConfirmDialog
 import com.example.fitbodstravasyncer.ui.composables.LoadingOverlay
-import com.example.fitbodstravasyncer.ui.composables.SessionCardWithCheckbox
 import com.example.fitbodstravasyncer.ui.main.AppThemeMode
 import com.example.fitbodstravasyncer.worker.StravaUploadWorker
 import kotlinx.coroutines.launch
@@ -138,7 +138,10 @@ fun MainScreen(
                                 onExpandToggle = { viewModel.toggleExpansion(session.id) },
                                 onCheckedChange = { viewModel.toggleSelection(session.id) },
                                 // animateContentSize ONLY for expanded card, NOT on every card
-                                modifier = if (expandedIds.contains(session.id)) Modifier.animateContentSize() else Modifier
+                                modifier = Modifier
+                                    .animateItem()
+                                    .animateContentSize()
+
                             )
                         }
                     }
@@ -198,16 +201,15 @@ fun MainScreen(
                         onCheckMatching = {
                             if (!isChecking) {
                                 isChecking = true
-                                coroutineScope.launch {
-                                    try {
-                                        viewModel.restoreStravaIds()
-                                        viewModel.unsyncIfStravaDeleted()
-                                        lastActionToast = "Matching Strava workouts checked"
-                                    } finally {
-                                        isChecking = false
-                                        showSheet = false
-                                    }
+                                viewModel.triggerCheckMatching {
+                                    viewModel.restoreStravaIds()
+                                    viewModel.unsyncIfStravaDeleted()
+                                    lastActionToast = "Matching Strava workouts checked"
+                                    isChecking = false
+                                    showSheet = false
                                 }
+                            } else {
+                                lastActionToast = "Please wait 15 minutes between checks."
                             }
                         },
                         onToggleFutureSync = { viewModel.toggleFutureSync(it) },

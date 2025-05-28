@@ -1,20 +1,14 @@
-package com.example.fitbodstravasyncer.ui.composables
-
 import HeartRateChartInteractive
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
@@ -40,11 +34,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.fitbodstravasyncer.ui.UiConstants.ANIMATION_DURATION_MS
-import com.example.fitbodstravasyncer.ui.UiConstants.CARD_CONTENT_PADDING
 import com.example.fitbodstravasyncer.ui.UiConstants.CARD_CORNER
 import com.example.fitbodstravasyncer.ui.UiConstants.CARD_ELEVATION
-import com.example.fitbodstravasyncer.ui.UiConstants.CARD_HORIZONTAL_PADDING
-import com.example.fitbodstravasyncer.ui.UiConstants.CARD_VERTICAL_PADDING
 import com.example.fitbodstravasyncer.ui.UiConstants.CHECKBOX_SCALE_DEFAULT
 import com.example.fitbodstravasyncer.ui.UiConstants.CHECKBOX_SCALE_SELECTED
 import com.example.fitbodstravasyncer.util.SessionMetrics
@@ -80,7 +71,6 @@ fun SessionCardWithCheckbox(
     val startDateTimeParts = startPart.split(" ")
     val date = startDateTimeParts.getOrNull(0) ?: ""
     val startTimeStr = startDateTimeParts.drop(1).joinToString(" ")
-
     val endDateTimeParts = endPart.split(" ")
     val endTimeStr = endDateTimeParts.drop(1).joinToString(" ")
 
@@ -97,10 +87,10 @@ fun SessionCardWithCheckbox(
     )
 
     Card(
-        onClick = {onExpandToggle()},
+        onClick = { onExpandToggle() },
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = CARD_HORIZONTAL_PADDING, vertical = CARD_VERTICAL_PADDING)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .animateContentSize(),
         shape = RoundedCornerShape(CARD_CORNER),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -109,91 +99,90 @@ fun SessionCardWithCheckbox(
         Box(
             modifier = Modifier
                 .background(backgroundGradient)
-                .padding(CARD_CONTENT_PADDING)
-        ) {
-            // Sync status icon and label at top start
-            // Sync status icon, label, and checkbox on the same row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-            ) {
-
-                SyncStatusLabel(session.stravaId)
-                Checkbox(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    modifier = Modifier.scale(scale)
-                )
-            }
-        }
-
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
+                .padding(20.dp)
                 .fillMaxWidth()
-                .padding(top = 40.dp)
         ) {
-            Spacer(Modifier.height(6.dp)) // Space below icon row
-
-            Text(
-                text = session.title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                text = date,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                text = "$formattedStartTime - $formattedEndTime",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            session.description.takeIf { it.isNotBlank() }?.let { desc ->
-                Text(
-                    text = desc.replace("\n", ", "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-            Row(
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                StatColumn(
-                    icon = Icons.Default.AccessTime,
-                    label = "Duration",
-                    value = "${session.activeTime} min",
-                    iconTint = MaterialTheme.colorScheme.primary
-                )
-                StatColumn(
-                    icon = Icons.Default.LocalFireDepartment,
-                    label = "Calories",
-                    value = "${session.calories.toInt()} kcal",
-                    iconTint = MaterialTheme.colorScheme.error
-                )
-                session.avgHeartRate?.let {
-                    StatColumn(
-                        icon = Icons.Default.Favorite,
-                        label = "Avg HR",
-                        value = "${it.toInt()} bpm",
-                        iconTint = MaterialTheme.colorScheme.secondary
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    SyncStatusLabel(session.stravaId)
+                    Checkbox(
+                        checked = checked,
+                        onCheckedChange = onCheckedChange,
+                        modifier = Modifier.scale(scale)
                     )
                 }
-            }
-            if (expanded && session.heartRateSeries.isNotEmpty()) {
-                HeartRateChartInteractive(session.heartRateSeries)
+
+                Spacer(Modifier.height(12.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = session.title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = date,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "$formattedStartTime - $formattedEndTime",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    session.description.takeIf { it.isNotBlank() }?.let { desc ->
+                        Text(
+                            text = desc.replace("\n", ", "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        StatColumn(
+                            icon = Icons.Default.AccessTime,
+                            label = "Duration",
+                            value = "${session.activeTime} min",
+                            iconTint = MaterialTheme.colorScheme.primary
+                        )
+                        StatColumn(
+                            icon = Icons.Default.LocalFireDepartment,
+                            label = "Calories",
+                            value = "${session.calories.toInt()} kcal",
+                            iconTint = MaterialTheme.colorScheme.error
+                        )
+                        session.avgHeartRate?.let {
+                            StatColumn(
+                                icon = Icons.Default.Favorite,
+                                label = "Avg HR",
+                                value = "${it.toInt()} bpm",
+                                iconTint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                    // ---- Animated visibility for expanded content ----
+                    AnimatedVisibility(
+                        visible = expanded && session.heartRateSeries.isNotEmpty(),
+                        enter = fadeIn(tween(250)) + expandVertically(),
+                        exit = fadeOut(tween(250)) + shrinkVertically()
+                    ) {
+                        HeartRateChartInteractive(session.heartRateSeries)
+                    }
+                }
             }
         }
     }
 }
-
 
 @Composable
 private fun SyncStatusLabel(stravaId: Long?) {
@@ -209,7 +198,6 @@ private fun SyncStatusLabel(stravaId: Long?) {
         Text(text, color = color, style = MaterialTheme.typography.labelMedium)
     }
 }
-
 
 @Composable
 private fun StatColumn(

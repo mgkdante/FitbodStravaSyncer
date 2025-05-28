@@ -32,7 +32,6 @@ import com.example.fitbodstravasyncer.util.UiState
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-
 @Composable
 fun ActionsSheet(
     state: UiState,
@@ -191,8 +190,8 @@ fun ActionsSheet(
     if (showDatePickerFrom) {
         MaterialDatePickerDialog(
             initialDate = state.dateFrom ?: LocalDate.now(),
-            onDateSelected = {
-                onDateFromChange(it)
+            onDateSelected = { selectedDate ->
+                onDateFromChange(selectedDate)
                 showDatePickerFrom = false
             },
             onDismiss = { showDatePickerFrom = false }
@@ -202,13 +201,14 @@ fun ActionsSheet(
     if (showDatePickerTo) {
         MaterialDatePickerDialog(
             initialDate = state.dateTo ?: LocalDate.now(),
-            onDateSelected = {
-                onDateToChange(it)
+            onDateSelected = { selectedDate ->
+                onDateToChange(selectedDate)
                 showDatePickerTo = false
             },
             onDismiss = { showDatePickerTo = false }
         )
     }
+
 }
 
 @Composable

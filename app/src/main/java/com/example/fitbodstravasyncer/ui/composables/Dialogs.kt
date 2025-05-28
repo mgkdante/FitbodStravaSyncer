@@ -12,7 +12,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
+import java.time.ZoneOffset
 
 @Composable
 fun ConfirmDialog(
@@ -70,7 +70,7 @@ fun MaterialDatePickerDialog(
 ) {
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = initialDate
-            .atStartOfDay(ZoneId.systemDefault())
+            .atStartOfDay(ZoneOffset.UTC)
             .toInstant()
             .toEpochMilli()
     )
@@ -81,7 +81,7 @@ fun MaterialDatePickerDialog(
             TextButton(onClick = {
                 datePickerState.selectedDateMillis?.let { millis ->
                     val selectedDate = Instant.ofEpochMilli(millis)
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(ZoneOffset.UTC)
                         .toLocalDate()
                     onDateSelected(selectedDate)
                 }
