@@ -38,6 +38,8 @@ private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
 private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
 
+
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val repo =
         SessionRepository(AppDatabase.getInstance(application).sessionDao())
@@ -45,6 +47,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val stravaClient = StravaApiClient(application)
     private var lastCheckMatching = 0L
     private var lastSyncAll = 0L
+
+    sealed class SessionsUiState {
+        object Loading : SessionsUiState()
+        data class Content(val sessions: List<SessionMetrics>) : SessionsUiState()
+        object Empty : SessionsUiState()
+        data class Error(val message: String) : SessionsUiState()
+    }
+
 
     private val _uiState = MutableStateFlow(
         UiState(
@@ -70,17 +80,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _expandedIds = MutableStateFlow<Set<String>>(emptySet())
     val expandedIds: StateFlow<Set<String>> = _expandedIds
 
+    // At top of HomeViewModel
+    private val _pendingDataLoad = MutableStateFlow(false)
+    val pendingDataLoad: StateFlow<Boolean> get() = _pendingDataLoad
+
+    private val _sessionsUiState = MutableStateFlow<SessionsUiState>(SessionsUiState.Loading)
+    val sessionsUiState: StateFlow<SessionsUiState> = _sessionsUiState
+
+
     init {
         loadSessions()
         refreshApiCounters()
     }
 
     private fun loadSessions() = viewModelScope.launch {
-        repo.allSessions().collect { list ->
-            Log.d("ViewModel", "Sessions from DB: " + list.joinToString { "${it.id} -> ${it.heartRateSeries}" })
-            _uiState.update { it.copy(sessionMetrics = list.map { it.toMetrics() }) }
+        try {
+            repo.allSessions().collect { list ->
+                _sessionsUiState.value = when {
+                    list.isEmpty() && _uiState.value.hasFetchedOnce -> SessionsUiState.Empty
+                    list.isNotEmpty() -> SessionsUiState.Content(list.map { it.toMetrics() })
+                    else -> SessionsUiState.Loading
+                }
+                _uiState.update { it.copy(sessionMetrics = list.map { it.toMetrics() }) }
+                checkAndWarnApiLimits()
+            }
+        } catch (e: Exception) {
+            _sessionsUiState.value = SessionsUiState.Error(e.localizedMessage ?: "Unknown error loading sessions")
+            Log.e("HomeViewModel", "Error loading sessions", e)
         }
-        checkAndWarnApiLimits()
     }
 
     private fun refreshApiCounters() {
@@ -169,7 +196,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectAll(ids: List<String>) {
-        _selectedIds.value = ids.toSet()
+        _selectedIds.value = if (_selectedIds.value.containsAll(ids)) emptySet() else ids.toSet()
     }
 
 
@@ -230,9 +257,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun fetchSessions(from: LocalDate?, to: LocalDate?) = viewModelScope.launch {
+        _pendingDataLoad.value = true
         _uiState.update { it.copy(isFetching = true) }
         if (from == null || to == null) {
             _uiState.update { it.copy(isFetching = false) }
+            _pendingDataLoad.value = false
             return@launch
         }
         try {
@@ -260,7 +289,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             Log.e("MainViewModel", "Error fetching sessions", e)
         } finally {
-            _uiState.update { it.copy(isFetching = false) }
+            _uiState.update { it.copy(
+                isFetching = false,
+                hasFetchedOnce = true  // Set this here!
+            ) }
             refreshApiCounters()
         }
     }

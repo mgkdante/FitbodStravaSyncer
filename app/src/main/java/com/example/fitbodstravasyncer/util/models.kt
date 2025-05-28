@@ -31,7 +31,8 @@ data class UiState(
     val apiRequestsDay: Int = 0,
     val apiRequests15Min: Int = 0,
     val apiLimitReached: Boolean = false,
-    val apiLimitResetHint: String = ""
+    val apiLimitResetHint: String = "",
+    val hasFetchedOnce: Boolean = false
 
 )
 

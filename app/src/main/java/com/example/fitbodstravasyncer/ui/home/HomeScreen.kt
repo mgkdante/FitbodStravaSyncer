@@ -1,8 +1,12 @@
 package com.example.fitbodstravasyncer.ui.home
 
+import SessionCardWithCheckbox
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -12,8 +16,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.fitbodstravasyncer.ui.SyncFilter
 import com.example.fitbodstravasyncer.ui.UiStrings
+import com.example.fitbodstravasyncer.ui.composables.ErrorMessage
 import com.example.fitbodstravasyncer.ui.composables.LoadingOverlay
 import com.example.fitbodstravasyncer.ui.main.AppThemeMode
+
 enum class SessionOrder { NEWEST_FIRST, OLDEST_FIRST }
 fun SessionOrder.toggle() = if (this == SessionOrder.NEWEST_FIRST) SessionOrder.OLDEST_FIRST else SessionOrder.NEWEST_FIRST
 
@@ -38,6 +44,9 @@ fun HomeScreen(
     val expandedIds by viewModel.expandedIds.collectAsState()
     var lastActionToast by remember { mutableStateOf<String?>(null) }
 
+    val sessionsUiState by viewModel.sessionsUiState.collectAsState()
+
+    // You can remove this if you only want to show what is in the sessionsUiState
     val (sortedSessions, listState) = rememberSortedSessions(
         state = state,
         syncFilter = syncFilter,
@@ -66,25 +75,69 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                CheckUncheckAllRow(
-                    sessions = sortedSessions,
-                    selectedIds = selectedIds,
-                    onCheckAll = { viewModel.selectAll(sortedSessions.map { it.id }) },
-                    onUncheckAll = { viewModel.clearSelection() }
-                )
-                SessionsListOrEmptyState(
-                    sessions = sortedSessions,
-                    listState = listState,
-                    selectedIds = selectedIds,
-                    expandedIds = expandedIds,
-                    viewModel = viewModel
-                )
+            when (sessionsUiState) {
+                is HomeViewModel.SessionsUiState.Loading -> {
+                    LoadingOverlay()
+                }
+                is HomeViewModel.SessionsUiState.Empty -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = UiStrings.NO_ACTIVITIES_ICON_DESC,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(60.dp)
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = UiStrings.NO_ACTIVITIES,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                is HomeViewModel.SessionsUiState.Content -> {
+                    val sessions = (sessionsUiState as HomeViewModel.SessionsUiState.Content).sessions
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        CheckUncheckAllRow(
+                            sessions = sessions,
+                            selectedIds = selectedIds,
+                            onCheckAll = { viewModel.selectAll(sessions.map { it.id }) },
+                            onUncheckAll = { viewModel.clearSelection() }
+                        )
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(sessions, key = { it.id }) { session ->
+                                SessionCardWithCheckbox(
+                                    session = session,
+                                    checked = selectedIds.contains(session.id),
+                                    expanded = expandedIds.contains(session.id),
+                                    onExpandToggle = { viewModel.toggleExpansion(session.id) },
+                                    onCheckedChange = { viewModel.toggleSelection(session.id) },
+                                    modifier = Modifier
+                                        .animateContentSize()
+                                )
+                            }
+                        }
+                    }
+                }
+                is HomeViewModel.SessionsUiState.Error -> {
+                    val message = (sessionsUiState as HomeViewModel.SessionsUiState.Error).message
+                    ErrorMessage(message)
+                }
             }
 
-            if (state.isFetching) LoadingOverlay()
 
             ConfirmDeleteDialogs(
                 showDelete = showDelete,
@@ -119,139 +172,6 @@ fun HomeScreen(
                 viewModel = viewModel,
                 setLastActionToast = { lastActionToast = it }
             )
-        }
-    }
-}
-
-// Three dots menu with theme/filter/sort all together
-@Composable
-fun FilterThemeSortDropdown(
-    currentFilter: SyncFilter,
-    onFilterChange: (SyncFilter) -> Unit,
-    currentTheme: AppThemeMode,
-    onThemeChange: (AppThemeMode) -> Unit,
-    dynamicColorEnabled: Boolean,
-    onDynamicColorToggled: (Boolean) -> Unit,
-    sessionOrder: SessionOrder,
-    onOrderChange: (SessionOrder) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    val themes = listOf(
-        Triple(UiStrings.THEME_LIGHT, AppThemeMode.LIGHT, Icons.Default.Brightness7),
-        Triple(UiStrings.THEME_DARK, AppThemeMode.DARK, Icons.Default.Brightness4),
-        Triple(UiStrings.THEME_SYSTEM, AppThemeMode.SYSTEM, Icons.Default.Settings)
-    )
-
-    Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
-        IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = UiStrings.MENU)
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .widthIn(min = 220.dp)
-                .padding(vertical = 8.dp)
-        ) {
-            // Filters section
-            Text(
-                UiStrings.FILTER_ACTIVITIES,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-            SyncFilter.entries.forEach { filter ->
-                DropdownMenuItem(
-                    text = { Text(filter.label, modifier = Modifier.padding(vertical = 4.dp)) },
-                    onClick = { onFilterChange(filter) }, // Do NOT close dropdown
-                    leadingIcon = { Icon(filter.icon, contentDescription = null) },
-                    trailingIcon = {
-                        if (currentFilter == filter) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = UiStrings.SELECTED,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider()
-
-            // Themes section
-            Text(
-                UiStrings.APP_THEME,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-            themes.forEach { (label, value, icon) ->
-                DropdownMenuItem(
-                    text = { Text(label, modifier = Modifier.padding(vertical = 4.dp)) },
-                    onClick = { onThemeChange(value) }, // Do NOT close dropdown
-                    leadingIcon = { Icon(icon, contentDescription = null) },
-                    trailingIcon = {
-                        if (currentTheme == value) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = UiStrings.SELECTED,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider()
-
-            // Sort by Date section
-            Text(
-                "Sort",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-            DropdownMenuItem(
-                text = { Text(if (sessionOrder == SessionOrder.NEWEST_FIRST) "Newest First" else "Oldest First") },
-                onClick = { onOrderChange(sessionOrder.toggle()) },
-                leadingIcon = {
-                    Icon(
-                        if (sessionOrder == SessionOrder.NEWEST_FIRST)
-                            Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                        contentDescription = null
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 12.dp)
-            )
-
-            Spacer(Modifier.height(10.dp))
-            HorizontalDivider()
-
-            // Dynamic Color Toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    UiStrings.USE_DYNAMIC_COLOR,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 12.dp)
-                )
-                Switch(
-                    checked = dynamicColorEnabled,
-                    onCheckedChange = { onDynamicColorToggled(it) }
-                )
-            }
         }
     }
 }
