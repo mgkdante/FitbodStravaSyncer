@@ -37,7 +37,7 @@ class StravaAutoUploadWorker(
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME, // use constant here
                 ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<StravaAutoUploadWorker>(1, TimeUnit.HOURS)
+                PeriodicWorkRequestBuilder<StravaAutoUploadWorker>(15, TimeUnit.MINUTES)
                     .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 5, TimeUnit.MINUTES)
                     .setConstraints(
                         Constraints.Builder()
@@ -72,32 +72,60 @@ class StravaAutoUploadWorker(
             val nowInstant = Instant.now()
             val startInstant = nowInstant.minusSeconds(24 * 3600)
 
+            // Only call Health Connect first
+            val newSessions = FitbodFetcher.fetchFitbodSessions(
+                healthClient,
+                startInstant,
+                nowInstant,
+                emptyList() // pass empty Strava list, just want raw Fitbod
+            )
+
+            // Check if there are new sessions not already in the DB
+            val existingSessions = dao.getAllOnce().map { it.id }.toSet()
+            val trulyNewSessions = newSessions.filter { it.id !in existingSessions }
+
+            if (trulyNewSessions.isEmpty()) {
+                // Nothing new: NO STRAVA API CALLS at all!
+                return@withContext Result.success()
+            }
+
+            // Only proceed with Strava API if new sessions found
+            // Now fetch Strava activities
             val client = StravaApiClient(context)
             val stravaActivities = client.listAllActivities()
 
-            val newSessions = FitbodFetcher.fetchFitbodSessions(healthClient, startInstant, nowInstant, stravaActivities)
+            // Update any sessions that match existing Strava activities (avoid duplicates)
+            val sessionsToInsert = trulyNewSessions.map { session ->
+                val match = stravaActivities.firstOrNull { activity ->
+                    activity.startDate?.let {
+                        val actEpoch = try { Instant.parse(it).epochSecond } catch (e: Exception) { null }
+                        actEpoch != null && kotlin.math.abs(actEpoch - session.startTime.epochSecond) < 300
+                    } == true
+                }
+                if (match?.id != null) session.copy(stravaId = match.id) else session
+            }
 
-            newSessions.forEach { session -> dao.insert(session) }
+            sessionsToInsert.forEach { dao.insert(it) }
 
-            val unsyncedSessions = dao.getAllOnce().filter { it.stravaId == null }
-            if (unsyncedSessions.isNotEmpty()) {
-                Log.i(TAG, "Uploading ${unsyncedSessions.size} unsynced sessions to Strava")
-                unsyncedSessions.forEach { session ->
-                    Log.i(TAG, "Enqueuing upload for session ${session.id}")
+            // Only upload sessions not already matched to Strava
+            val toUpload = sessionsToInsert.filter { it.stravaId == null }
+            if (toUpload.isNotEmpty()) {
+                toUpload.forEach { session ->
                     StravaUploadWorker.enqueue(context, session.id)
                 }
                 NotificationHelper.showNotification(
                     applicationContext,
                     UiStrings.AUTO_SYNC_NOTIFICATION_TITLE,
-                    "${unsyncedSessions.size} new Fitbod session(s) uploaded to Strava.",
+                    "${toUpload.size} new Fitbod session(s) uploaded to Strava.",
                     10125
                 )
             }
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "Auto-sync failed", e)
+            Log.e("STRAVA-auto", "Auto-sync failed", e)
             Result.retry()
         }
     }
+
 
 }

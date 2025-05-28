@@ -24,7 +24,7 @@ import com.example.fitbodstravasyncer.ui.auth.launchStravaAuthFlow
 import com.example.fitbodstravasyncer.ui.auth.rememberStravaAuthLauncher
 import com.example.fitbodstravasyncer.ui.composables.LoadingProgressIndicator
 import com.example.fitbodstravasyncer.ui.home.HomeViewModel
-import com.example.fitbodstravasyncer.ui.home.MainScreen
+import com.example.fitbodstravasyncer.ui.home.HomeScreen
 import com.example.fitbodstravasyncer.ui.util.OnResumeEffect
 import com.example.fitbodstravasyncer.ui.util.PermissionAndAuthEffects
 import com.example.fitbodstravasyncer.ui.util.rememberPermissionLauncher
@@ -102,7 +102,7 @@ fun MainActivityContent(
                         }
                     )
                 } else {
-                    MainScreen(
+                    HomeScreen(
                         viewModel = viewModel,
                         appThemeMode = appThemeMode,
                         onThemeChange = { appThemeMode = it }

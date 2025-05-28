@@ -168,6 +168,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         checkAndWarnApiLimits()
     }
 
+    fun selectAll(ids: List<String>) {
+        _selectedIds.value = ids.toSet()
+    }
+
+
     fun toggleDynamicColor(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_DYNAMIC_COLOR, enabled) }
         _uiState.update { it.copy(dynamicColor = enabled) }
