@@ -52,6 +52,15 @@ object StravaPrefs {
     }
 
 
+    fun disconnect(context: Context) {
+        securePrefs(context).edit {
+            remove(KEY_ACCESS)
+            remove(KEY_REFRESH)
+            remove(KEY_EXPIRES)
+            remove(KEY_LAST_FETCH_EPOCH)
+        }
+    }
+
     fun getApiRequestCountDay(context: Context): Int =
         securePrefs(context).getInt(KEY_REQUEST_COUNT_DAY, 0)
 

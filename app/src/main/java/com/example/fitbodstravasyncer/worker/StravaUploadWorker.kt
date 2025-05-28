@@ -17,6 +17,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
 import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
@@ -181,7 +182,16 @@ class StravaUploadWorker(
                 2
             )
             Result.retry()
+        } catch (e: HttpException) {
+        if (e.code() == 429) {
+            Log.e(TAG, "Strava API rate limit hit (429). Backing off.")
+            return@withContext Result.retry()
         }
+        Log.e(TAG, "HTTP error: ${e.code()}", e)
+        Result.failure()
+    } catch (e: Exception) {
+        Result.retry()
+    }
     }
 
 }

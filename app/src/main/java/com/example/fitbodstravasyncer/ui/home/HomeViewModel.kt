@@ -56,6 +56,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     )
     val uiState: StateFlow<UiState> = _uiState
 
+    fun disconnectStrava() {
+        StravaPrefs.disconnect(getApplication())
+        _uiState.update { it.copy(stravaConnected = false) }
+    }
+
+
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedIds: StateFlow<Set<String>> = _selectedIds
 

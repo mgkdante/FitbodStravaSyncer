@@ -285,7 +285,7 @@ fun DatePickerRow(
                 modifier = Modifier.padding(bottom = 4.dp)
             )
         }
-        OutlinedButton(onClick = onClick) {
+        Button(onClick = onClick) {
             Text("Pick")
         }
     }
