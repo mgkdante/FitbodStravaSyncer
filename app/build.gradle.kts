@@ -22,11 +22,11 @@ val props = Properties().apply {
 
 
 android {
-    namespace = "com.example.fitbodstravasyncer"
+    namespace = "app.secondclass.healthsyncer"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.fitbodstravasyncer"
+        applicationId = "app.secondclass.healthsyncer"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

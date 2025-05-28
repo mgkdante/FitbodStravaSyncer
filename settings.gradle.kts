@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FitbodStravaSyncer"
+rootProject.name = "HealthSyncer"
 include(":app")

@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.fitbodstravasyncer">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Health Connect installation query -->
     <queries>
@@ -18,7 +17,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:name=".App"
+        android:name="app.secondclass.healthsyncer.App"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:networkSecurityConfig="@xml/network_security_config"
@@ -26,7 +25,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.FitbodStravaSyncer">
+        android:theme="@style/Theme.HealthSyncer">
 
         <!-- FileProvider for sharing TCX files/images -->
         <provider
@@ -41,10 +40,10 @@
 
         <!-- Main launcher activity (handles OAuth redirect too) -->
         <activity
-            android:name=".ui.main.MainActivity"
+            android:name="app.secondclass.healthsyncer.ui.main.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.FitbodStravaSyncer.Splash">
+            android:theme="@style/Theme.HealthSyncer.Splash">
 
             <!-- Main launcher intent filter -->
             <intent-filter>
@@ -55,7 +54,7 @@
 
         <!-- Health Connect permission rationale (Android 13+) -->
         <activity
-            android:name=".ui.PermissionsRationaleActivity"
+            android:name="app.secondclass.healthsyncer.ui.PermissionsRationaleActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
@@ -68,7 +67,7 @@
             android:name=".ViewPermissionUsageActivity"
             android:exported="true"
             android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
-            android:targetActivity=".ui.PermissionsRationaleActivity">
+            android:targetActivity="app.secondclass.healthsyncer.ui.PermissionsRationaleActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
@@ -77,7 +76,7 @@
 
         <!-- Strava OAuth redirect handler -->
         <activity
-            android:name=".ui.main.StravaRedirectActivity"
+            android:name="app.secondclass.healthsyncer.ui.main.StravaRedirectActivity"
             android:exported="true"
             android:noHistory="true">
             <intent-filter android:label="Strava OAuth Redirect">

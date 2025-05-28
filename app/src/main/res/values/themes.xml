@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.FitbodStravaSyncer" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.HealthSyncer" parent="android:Theme.Material.Light.NoActionBar" />
 
         <!-- Splash Screen Theme -->
-    <style name="Theme.FitbodStravaSyncer.Splash" parent="Theme.SplashScreen">
+    <style name="Theme.HealthSyncer.Splash" parent="Theme.SplashScreen">
         <!-- Set the splash screen background color -->
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <!-- Set the splash screen icon -->
@@ -12,7 +12,7 @@
         <!-- Set the duration for the splash screen icon animation -->
         <item name="windowSplashScreenAnimationDuration">1000</item>
         <!-- Set the theme to apply after the splash screen -->
-        <item name="postSplashScreenTheme">@style/Theme.FitbodStravaSyncer</item>
+        <item name="postSplashScreenTheme">@style/Theme.HealthSyncer</item>
     </style>
 
 
