@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.fitbodstravasyncer.ui.UiStrings
 
 /** Simple two-step onboarding UI */
 @Composable
@@ -27,13 +28,13 @@ fun AuthScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Welcome! Let’s get set up.", style = MaterialTheme.typography.headlineMedium)
+        Text(UiStrings.WELCOME, style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(32.dp))
 
         SetupStep(
             completed = hasHealthPermissions,
-            label = "Step 1: Grant Health Connect Permission",
-            buttonLabel = "Grant Health Connect",
+            label = UiStrings.STEP1_LABEL,
+            buttonLabel = UiStrings.STEP1_BTN,
             onClick = onRequestHealthPermissions
         )
 
@@ -41,14 +42,14 @@ fun AuthScreen(
 
         SetupStep(
             completed = isStravaConnected,
-            label = "Step 2: Connect to Strava",
-            buttonLabel = "Connect Strava",
+            label = UiStrings.STEP2_LABEL,
+            buttonLabel = UiStrings.STEP2_BTN,
             onClick = onConnectStrava
         )
 
         Spacer(Modifier.height(32.dp))
         if (hasHealthPermissions && isStravaConnected) {
-            Text("Setup complete! Entering app…")
+            Text(UiStrings.SETUP_COMPLETE)
         }
     }
 }

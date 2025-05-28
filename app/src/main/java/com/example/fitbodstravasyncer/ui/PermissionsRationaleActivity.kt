@@ -25,7 +25,7 @@ class PermissionsRationaleActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                "Why this permission?",
+                                UiStrings.WHY_THIS_PERMISSION,
                                 style = MaterialTheme.typography.headlineMedium
                             )
                             Spacer(Modifier.height(16.dp))
@@ -45,7 +45,7 @@ class PermissionsRationaleActivity : ComponentActivity() {
                                         finish()
                                     }
                                 ) {
-                                    Text("Allow")
+                                    Text(UiStrings.ALLOW)
                                 }
                                 OutlinedButton(
                                     onClick = {
@@ -53,7 +53,7 @@ class PermissionsRationaleActivity : ComponentActivity() {
                                         finish()
                                     }
                                 ) {
-                                    Text("Deny")
+                                    Text(UiStrings.DENY)
                                 }
                             }
                         }

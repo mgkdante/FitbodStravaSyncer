@@ -33,5 +33,5 @@ object UiConstants {
 enum class SyncFilter(val label: String, val icon: ImageVector) {
     ALL("All", Icons.Default.List),
     NON_SYNCED("Non Synced", Icons.Default.CloudOff),
-    SYNCED("Synced", Icons.Default.CloudDone)
+    SYNCED(UiStrings.SYNCED, Icons.Default.CloudDone)
 }

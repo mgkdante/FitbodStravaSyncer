@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.util.LabeledControlConfig
 import com.example.fitbodstravasyncer.util.UiState
 import java.time.LocalDate
@@ -56,8 +57,8 @@ fun ActionsSheet(
             add(
                 LabeledControlConfig(
                     key = "fetch",
-                    helpTitle = "Fetch Workouts",
-                    helpDescription = "Fetches Fitbod workouts between the selected dates.",
+                    helpTitle = UiStrings.FETCH_WORKOUTS_TITLE,
+                    helpDescription = UiStrings.FETCH_WORKOUTS_DESC,
                     content = {
                         Button(
                             onClick = onFetch,
@@ -78,7 +79,7 @@ fun ActionsSheet(
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
-                            Text("Fetch Fitbod Workouts")
+                            Text(UiStrings.FETCH_FITBOD_BTN)
                         }
                     }
                 )
@@ -86,9 +87,9 @@ fun ActionsSheet(
             add(
                 LabeledControlConfig(
                     key = "autoSync",
-                    helpTitle = "Auto-sync",
-                    helpDescription = "Automatically syncs workouts to or from Strava every 15 minutes for the past 24 hours.",
-                    label = "Auto-sync 24h every 15m",
+                    helpTitle = UiStrings.AUTO_SYNC_TITLE,
+                    helpDescription = UiStrings.AUTO_SYNC_DESC,
+                    label = UiStrings.AUTO_SYNC_LABEL,
                     content = {
                         Switch(
                             checked = state.futureSync,
@@ -100,9 +101,9 @@ fun ActionsSheet(
             add(
                 LabeledControlConfig(
                     key = "dailySync",
-                    helpTitle = "Daily Sync",
-                    helpDescription = "Performs a daily synchronization of your workouts.",
-                    label = "Daily Sync",
+                    helpTitle = UiStrings.DAILY_SYNC_LABEL,
+                    helpDescription = UiStrings.DAILY_SYNC_DESC,
+                    label = UiStrings.DAILY_SYNC_LABEL,
                     content = {
                         Switch(
                             checked = state.dailySync,
@@ -114,8 +115,8 @@ fun ActionsSheet(
             add(
                 LabeledControlConfig(
                     key = "checkMatching",
-                    helpTitle = "Check Matching Workouts",
-                    helpDescription = "Checks for workouts that already exist in Strava to avoid duplicates.",
+                    helpTitle = UiStrings.CHECK_MATCHING_TITLE,
+                    helpDescription = UiStrings.CHECK_MATCHING_DESC,
                     content = {
                         Button(
                             onClick = onCheckMatching,
@@ -129,7 +130,7 @@ fun ActionsSheet(
                                     modifier = Modifier.padding(8.dp)
                                 )
                             }
-                            Text("Read Strava's Activities")
+                            Text(UiStrings.CHECK_MATCHING_BTN)
                         }
                     }
                 )
@@ -137,8 +138,8 @@ fun ActionsSheet(
             add(
                 LabeledControlConfig(
                     key = "syncAll",
-                    helpTitle = "Sync All",
-                    helpDescription = "Synchronizes all workouts to Strava.",
+                    helpTitle = UiStrings.SYNC_ALL_TITLE,
+                    helpDescription = UiStrings.SYNC_ALL_DESC,
                     content = {
                         Button(
                             onClick = onSyncAll,
@@ -151,7 +152,7 @@ fun ActionsSheet(
                                     modifier = Modifier.padding(8.dp)
                                 )
                             }
-                            Text("Sync All Strava Activities")
+                            Text(UiStrings.SYNC_ALL_BTN)
                         }
                     }
                 )
@@ -160,14 +161,14 @@ fun ActionsSheet(
                 add(
                     LabeledControlConfig(
                         key = "deleteAll",
-                        helpTitle = "Delete All Sessions from App",
-                        helpDescription = "Deletes all workout sessions from the list. Does not delete from Strava neither Fitbod just on this App",
+                        helpTitle = UiStrings.DELETE_ALL_TITLE,
+                        helpDescription = UiStrings.DELETE_ALL_DESC,
                         content = {
                             Button(
                                 onClick = showDeleteAll,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Delete All Activities")
+                                Text(UiStrings.DELETE_ALL_BTN)
                             }
                         }
                     )
@@ -182,15 +183,15 @@ fun ActionsSheet(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Text("Actions", style = MaterialTheme.typography.titleLarge)
+        Text(UiStrings.ACTIONS, style = MaterialTheme.typography.titleLarge)
 
         DatePickerRow(
-            label = "Date From",
+            label = UiStrings.DATE_FROM,
             value = state.dateFrom?.format(dateFormatter) ?: "Not set",
             onClick = { showDatePickerFrom = true }
         )
         DatePickerRow(
-            label = "Date To",
+            label = UiStrings.DATE_TO,
             value = state.dateTo?.format(dateFormatter) ?: "Not set",
             onClick = { showDatePickerTo = true }
         )
@@ -274,7 +275,7 @@ fun HelpIconButton(
     IconButton(onClick = { showDialog = true }) {
         Icon(
             imageVector = Icons.Default.Info,
-            contentDescription = "Help",
+            contentDescription = UiStrings.HELP,
             tint = MaterialTheme.colorScheme.primary
         )
     }
@@ -307,7 +308,7 @@ fun DatePickerRow(
             )
         }
         Button(onClick = onClick) {
-            Text("Pick")
+            Text(UiStrings.PICK)
         }
     }
 }
@@ -341,7 +342,7 @@ fun SyncActionsSection(
             enabled = !state.apiLimitReached,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Sync All")
+            Text(UiStrings.SYNC_ALL_TITLE)
         }
         Button(
             onClick = onCheckMatching,
@@ -355,7 +356,7 @@ fun SyncActionsSection(
             enabled = !state.apiLimitReached,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Fetch Workouts")
+            Text(UiStrings.FETCH_WORKOUTS_TITLE)
         }
     }
 }

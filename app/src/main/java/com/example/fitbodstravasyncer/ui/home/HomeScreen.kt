@@ -28,6 +28,7 @@ import com.example.fitbodstravasyncer.ui.UiConstants.CARD_VERTICAL_PADDING
 import com.example.fitbodstravasyncer.ui.UiConstants.EMPTY_ICON_SIZE
 import com.example.fitbodstravasyncer.ui.UiConstants.FAB_PADDING
 import com.example.fitbodstravasyncer.ui.UiConstants.FAB_VERTICAL_SPACING
+import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.ui.composables.ActionsSheet
 import com.example.fitbodstravasyncer.ui.composables.AnimatedFab
 import com.example.fitbodstravasyncer.ui.composables.ConfirmDialog
@@ -112,13 +113,13 @@ fun MainScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 imageVector = Icons.Default.Info,
-                                contentDescription = "No activities",
+                                contentDescription = UiStrings.NO_ACTIVITIES_ICON_DESC,
                                 tint = MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(EMPTY_ICON_SIZE)
                             )
                             Spacer(Modifier.height(14.dp))
                             Text(
-                                text = "No activities fetched",
+                                text = UiStrings.NO_ACTIVITIES,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -156,7 +157,7 @@ fun MainScreen(
             // Confirmation dialogs
             ConfirmDialog(
                 visible = showDelete,
-                title = "Confirm Delete",
+                title = UiStrings.CONFIRM_DELETE_TITLE,
                 text = "Delete ${selectedIds.size} sessions?",
                 onConfirm = {
                     viewModel.deleteSessions(selectedIds.toList())
@@ -168,8 +169,8 @@ fun MainScreen(
             )
             ConfirmDialog(
                 visible = showDeleteAll,
-                title = "Confirm Delete All",
-                text = "Delete ALL sessions?",
+                title = UiStrings.CONFIRM_DELETE_ALL_TITLE,
+                text = UiStrings.CONFIRM_DELETE_ALL_TEXT,
                 onConfirm = {
                     viewModel.deleteAllSessions()
                     viewModel.clearSelection()
@@ -254,7 +255,7 @@ fun MainScreen(
                             }
                         },
                         icon = Icons.Default.CloudDone,
-                        contentDescription = "Sync Selected",
+                        contentDescription = UiStrings.SYNC_SELECTED,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
@@ -264,7 +265,7 @@ fun MainScreen(
                         visible = selectedIds.isNotEmpty(),
                         onClick = { showDelete = true },
                         icon = Icons.Default.Delete,
-                        contentDescription = "Delete Selected",
+                        contentDescription = UiStrings.DELETE_SELECTED,
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         contentColor = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -280,7 +281,7 @@ fun MainScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = FAB_PADDING)
                 ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "More Actions")
+                    Icon(Icons.Default.MoreVert, contentDescription = UiStrings.MORE_ACTIONS)
                 }
             }
         }
@@ -301,14 +302,14 @@ fun FilterAndThemeDropdown(
     var expanded by remember { mutableStateOf(false) }
 
     val themes = listOf(
-        Triple("Theme: Light", AppThemeMode.LIGHT, Icons.Default.Brightness7),
-        Triple("Theme: Dark", AppThemeMode.DARK, Icons.Default.Brightness4),
-        Triple("Theme: System", AppThemeMode.SYSTEM, Icons.Default.Settings)
+        Triple(UiStrings.THEME_LIGHT, AppThemeMode.LIGHT, Icons.Default.Brightness7),
+        Triple(UiStrings.THEME_DARK, AppThemeMode.DARK, Icons.Default.Brightness4),
+        Triple(UiStrings.THEME_SYSTEM, AppThemeMode.SYSTEM, Icons.Default.Settings)
     )
 
     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+            Icon(Icons.Default.MoreVert, contentDescription = UiStrings.MENU)
         }
 
         DropdownMenu(
@@ -320,7 +321,7 @@ fun FilterAndThemeDropdown(
         ) {
             // Filters section
             Text(
-                "Filter Activities",
+                UiStrings.FILTER_ACTIVITIES,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
@@ -348,7 +349,7 @@ fun FilterAndThemeDropdown(
 
             // Themes section
             Text(
-                "App Theme",
+                UiStrings.APP_THEME,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
@@ -382,7 +383,7 @@ fun FilterAndThemeDropdown(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Use Dynamic Color",
+                    UiStrings.USE_DYNAMIC_COLOR,
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 12.dp)

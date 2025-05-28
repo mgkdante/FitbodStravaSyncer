@@ -38,6 +38,7 @@ import com.example.fitbodstravasyncer.ui.UiConstants.CARD_CORNER
 import com.example.fitbodstravasyncer.ui.UiConstants.CARD_ELEVATION
 import com.example.fitbodstravasyncer.ui.UiConstants.CHECKBOX_SCALE_DEFAULT
 import com.example.fitbodstravasyncer.ui.UiConstants.CHECKBOX_SCALE_SELECTED
+import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.util.SessionMetrics
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -151,20 +152,20 @@ fun SessionCardWithCheckbox(
                     ) {
                         StatColumn(
                             icon = Icons.Default.AccessTime,
-                            label = "Duration",
+                            label = UiStrings.DURATION,
                             value = "${session.activeTime} min",
                             iconTint = MaterialTheme.colorScheme.primary
                         )
                         StatColumn(
                             icon = Icons.Default.LocalFireDepartment,
-                            label = "Calories",
+                            label = UiStrings.CALORIES,
                             value = "${session.calories.toInt()} kcal",
                             iconTint = MaterialTheme.colorScheme.error
                         )
                         session.avgHeartRate?.let {
                             StatColumn(
                                 icon = Icons.Default.Favorite,
-                                label = "Avg HR",
+                                label = UiStrings.AVG_HR,
                                 value = "${it.toInt()} bpm",
                                 iconTint = MaterialTheme.colorScheme.secondary
                             )
@@ -188,9 +189,9 @@ fun SessionCardWithCheckbox(
 private fun SyncStatusLabel(stravaId: Long?) {
     val isSynced = stravaId != null
     val (icon, text, color) = if (isSynced) {
-        Triple(Icons.Default.CloudDone, "Synced", Color(0xFF43A047))
+        Triple(Icons.Default.CloudDone, UiStrings.SYNCED, Color(0xFF43A047))
     } else {
-        Triple(Icons.Default.CloudOff, "Not Synced", Color(0xFFD32F2F))
+        Triple(Icons.Default.CloudOff, UiStrings.NOT_SYNCED, Color(0xFFD32F2F))
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = text, tint = color, modifier = Modifier.size(22.dp))

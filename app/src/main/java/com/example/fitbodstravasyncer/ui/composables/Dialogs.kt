@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import com.example.fitbodstravasyncer.ui.UiStrings
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -31,10 +32,10 @@ fun ConfirmDialog(
                 Button(onClick = {
                     onConfirm()
                     onDismiss()
-                }) { Text("Yes") }
+                }) { Text(UiStrings.YES) }
             },
             dismissButton = {
-                Button(onClick = onDismiss) { Text("No") }
+                Button(onClick = onDismiss) { Text(UiStrings.NO) }
             },
             shape = MaterialTheme.shapes.large // uses theme shape for consistency
         )
@@ -55,7 +56,7 @@ fun InfoHelpDialog(
             title = { Text(title) },
             text = { Text(description) },
             confirmButton = {
-                TextButton(onClick = onDismiss) { Text("OK") }
+                TextButton(onClick = onDismiss) { Text(UiStrings.OK) }
             }
         )
     }
@@ -86,12 +87,12 @@ fun MaterialDatePickerDialog(
                     onDateSelected(selectedDate)
                 }
             }) {
-                Text("OK")
+                Text(UiStrings.OK)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(UiStrings.CANCEL)
             }
         }
     ) {

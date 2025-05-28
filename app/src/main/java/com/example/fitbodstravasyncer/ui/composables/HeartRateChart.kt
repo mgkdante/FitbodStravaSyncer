@@ -31,6 +31,7 @@ import com.example.fitbodstravasyncer.ui.UiConstants.CHART_AXIS_LABEL_Y_OFFSET
 import com.example.fitbodstravasyncer.ui.UiConstants.CHART_AXIS_TICK_COUNT
 import com.example.fitbodstravasyncer.ui.UiConstants.CHART_HEIGHT
 import com.example.fitbodstravasyncer.ui.UiConstants.CHART_X_LABEL_TEXT_SIZE
+import com.example.fitbodstravasyncer.ui.UiStrings
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -43,7 +44,7 @@ fun HeartRateChartInteractive(
     val selectedIndex = remember { mutableStateOf<Int?>(null) }
 
     if (heartRateSeries.size < 2) {
-        Text("Not enough heart rate data for chart.")
+        Text(UiStrings.NOT_ENOUGH_HR)
         return
     }
 
