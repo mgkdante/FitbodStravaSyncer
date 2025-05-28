@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.security.KeyStore
+import java.util.TimeZone
 import javax.crypto.AEADBadTagException
 
 /** single source of truth for the Strava token keys */
@@ -44,19 +45,31 @@ object StravaPrefs {
     fun incrementUserApiRequest(context: Context, isRead: Boolean) {
         val prefs = securePrefs(context)
         val now = System.currentTimeMillis()
+
+        // --- 1. Daily window (still works as before)
         val dayStart = now / (24 * 60 * 60 * 1000)
-        val min15Start = now / (15 * 60 * 1000)
 
         val prevDay = prefs.getLong(KEY_USER_REQUESTS_DAY_TS, -1)
-        val prev15m = prefs.getLong(KEY_USER_REQUESTS_15M_TS, -1)
         val dayReqCount = if (prevDay == dayStart) prefs.getInt(KEY_USER_REQUESTS_DAY, 0) else 0
-        val min15ReqCount = if (prev15m == min15Start) prefs.getInt(KEY_USER_REQUESTS_15M, 0) else 0
         val dayReadCount = if (prevDay == dayStart) prefs.getInt(KEY_USER_READS_DAY, 0) else 0
-        val min15ReadCount = if (prev15m == min15Start) prefs.getInt(KEY_USER_READS_15M, 0) else 0
+
+        // --- 2. Strava-style 15-min UTC window ---
+        val utcNow = System.currentTimeMillis() + TimeZone.getDefault().rawOffset // ensure UTC
+        val mins = utcNow / 60000
+        val quarter = mins / 15
+        // The key: which 15-min block in UTC we are in
+        val quarterHourWindow = quarter
+
+        val prevQuarter = prefs.getLong(KEY_USER_REQUESTS_15M_TS, -1)
+        val min15ReqCount = if (prevQuarter == quarterHourWindow) prefs.getInt(KEY_USER_REQUESTS_15M, 0) else 0
+        val min15ReadCount = if (prevQuarter == quarterHourWindow) prefs.getInt(KEY_USER_READS_15M, 0) else 0
 
         prefs.edit {
+            // Save window markers (so they roll over at right time)
             putLong(KEY_USER_REQUESTS_DAY_TS, dayStart)
-            putLong(KEY_USER_REQUESTS_15M_TS, min15Start)
+            putLong(KEY_USER_REQUESTS_15M_TS, quarterHourWindow)
+
+            // Increment counts, rolling over as needed
             putInt(KEY_USER_REQUESTS_DAY, dayReqCount + 1)
             putInt(KEY_USER_REQUESTS_15M, min15ReqCount + 1)
             if (isRead) {
@@ -65,6 +78,7 @@ object StravaPrefs {
             }
         }
     }
+
 
     fun getUserApiRequestCount15Min(context: Context): Int =
         securePrefs(context).getInt(KEY_USER_REQUESTS_15M, 0)

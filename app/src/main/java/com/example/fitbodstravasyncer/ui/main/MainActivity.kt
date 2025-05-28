@@ -1,5 +1,6 @@
 package com.example.fitbodstravasyncer.ui.main
 
+import MainActivityContent
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,8 +14,6 @@ import kotlinx.coroutines.launch
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewModelScope
 import com.example.fitbodstravasyncer.ui.home.HomeViewModel
-
-enum class AppThemeMode { SYSTEM, LIGHT, DARK }
 
 class MainActivity : ComponentActivity() {
     private val viewModel: HomeViewModel by viewModels()

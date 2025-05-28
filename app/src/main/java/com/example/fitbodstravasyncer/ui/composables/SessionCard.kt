@@ -1,4 +1,3 @@
-import HeartRateChartInteractive
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -99,9 +98,9 @@ fun SessionCardWithCheckbox(
     ) {
         Box(
             modifier = Modifier
+                .fillMaxWidth()
                 .background(backgroundGradient)
                 .padding(20.dp)
-                .fillMaxWidth()
         ) {
             Column {
                 Row(
@@ -116,9 +115,7 @@ fun SessionCardWithCheckbox(
                         modifier = Modifier.scale(scale)
                     )
                 }
-
                 Spacer(Modifier.height(12.dp))
-
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -183,7 +180,9 @@ fun SessionCardWithCheckbox(
             }
         }
     }
+
 }
+
 
 @Composable
 private fun SyncStatusLabel(stravaId: Long?) {

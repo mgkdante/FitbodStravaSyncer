@@ -105,8 +105,9 @@ fun FitbodStravaSyncerTheme(
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val dynamicColorAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        dynamicColor && dynamicColorAvailable -> {
             val ctx = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(ctx)
             else          dynamicLightColorScheme(ctx)

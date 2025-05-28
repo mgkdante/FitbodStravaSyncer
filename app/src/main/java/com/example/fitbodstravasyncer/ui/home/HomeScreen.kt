@@ -18,7 +18,6 @@ import com.example.fitbodstravasyncer.ui.SyncFilter
 import com.example.fitbodstravasyncer.ui.UiStrings
 import com.example.fitbodstravasyncer.ui.composables.ErrorMessage
 import com.example.fitbodstravasyncer.ui.composables.LoadingOverlay
-import com.example.fitbodstravasyncer.ui.main.AppThemeMode
 
 enum class SessionOrder { NEWEST_FIRST, OLDEST_FIRST }
 fun SessionOrder.toggle() = if (this == SessionOrder.NEWEST_FIRST) SessionOrder.OLDEST_FIRST else SessionOrder.NEWEST_FIRST
@@ -27,8 +26,7 @@ fun SessionOrder.toggle() = if (this == SessionOrder.NEWEST_FIRST) SessionOrder.
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    appThemeMode: AppThemeMode,
-    onThemeChange: (AppThemeMode) -> Unit
+    onSettingsClick: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -61,12 +59,9 @@ fun HomeScreen(
             TopBar(
                 syncFilter = syncFilter,
                 onFilterChange = { syncFilter = it },
-                appThemeMode = appThemeMode,
-                onThemeChange = onThemeChange,
-                dynamicColorEnabled = state.dynamicColor,
-                onDynamicColorToggled = viewModel::toggleDynamicColor,
                 sessionOrder = sessionOrder,
-                onOrderChange = { sessionOrder = it }
+                onOrderChange = { sessionOrder = it },
+                onSettingsClick = onSettingsClick
             )
         }
     ) { padding ->
@@ -102,15 +97,13 @@ fun HomeScreen(
                     }
                 }
                 is HomeViewModel.SessionsUiState.Content -> {
-                    val sessions = (sessionsUiState as HomeViewModel.SessionsUiState.Content).sessions
                     Column(
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        ApiUsageBanner(state)
                         CheckUncheckAllRow(
-                            sessions = sessions,
+                            sessions = sortedSessions,
                             selectedIds = selectedIds,
-                            onCheckAll = { viewModel.selectAll(sessions.map { it.id }) },
+                            onCheckAll = { viewModel.selectAll(sortedSessions.map { it.id }) },
                             onUncheckAll = { viewModel.clearSelection() }
                         )
                         LazyColumn(
@@ -119,15 +112,14 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(sessions, key = { it.id }) { session ->
+                            items(sortedSessions, key = { it.id }) { session ->
                                 SessionCardWithCheckbox(
                                     session = session,
                                     checked = selectedIds.contains(session.id),
                                     expanded = expandedIds.contains(session.id),
                                     onExpandToggle = { viewModel.toggleExpansion(session.id) },
                                     onCheckedChange = { viewModel.toggleSelection(session.id) },
-                                    modifier = Modifier
-                                        .animateContentSize()
+                                    modifier = Modifier.animateContentSize()
                                 )
                             }
                         }
