@@ -30,6 +30,8 @@ data class UiState(
     val dynamicColor: Boolean = true,
     val apiRequestsDay: Int = 0,
     val apiRequests15Min: Int = 0,
+    val apiLimitReached: Boolean = false,
+    val apiLimitResetHint: String = ""
 
 )
 

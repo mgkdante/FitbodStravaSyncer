@@ -64,6 +64,13 @@ fun ActionsSheet(
                             enabled = !isFetching && state.dateFrom != null && state.dateTo != null,
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            if (state.apiLimitReached) {
+                                Text(
+                                    text = "Can't Fetch Fitbod. Try again in ${state.apiLimitResetHint}",
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
                             if (isFetching) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(ButtonDefaults.IconSize),
@@ -71,7 +78,7 @@ fun ActionsSheet(
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
-                            Text("Fetch Workouts")
+                            Text("Fetch Fitbod Workouts")
                         }
                     }
                 )
@@ -80,7 +87,7 @@ fun ActionsSheet(
                 LabeledControlConfig(
                     key = "autoSync",
                     helpTitle = "Auto-sync",
-                    helpDescription = "Automatically syncs workouts every 15 minutes for the past 24 hours.",
+                    helpDescription = "Automatically syncs workouts to or from Strava every 15 minutes for the past 24 hours.",
                     label = "Auto-sync 24h every 15m",
                     content = {
                         Switch(
@@ -115,7 +122,14 @@ fun ActionsSheet(
                             enabled = !isChecking,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Check matching Strava workouts")
+                            if (state.apiLimitReached) {
+                                Text(
+                                    text = "Can't read Strava. Try again in ${state.apiLimitResetHint}",
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                            Text("Read Strava's Activities")
                         }
                     }
                 )
@@ -130,7 +144,14 @@ fun ActionsSheet(
                             onClick = onSyncAll,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Sync All")
+                            if (state.apiLimitReached) {
+                                Text(
+                                    text = "Can't sync all. Try again in ${state.apiLimitResetHint}",
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                            Text("Sync All Strava Activities")
                         }
                     }
                 )
@@ -139,14 +160,14 @@ fun ActionsSheet(
                 add(
                     LabeledControlConfig(
                         key = "deleteAll",
-                        helpTitle = "Delete All",
-                        helpDescription = "Deletes all workout sessions from the list.",
+                        helpTitle = "Delete All Sessions from App",
+                        helpDescription = "Deletes all workout sessions from the list. Does not delete from Strava neither Fitbod just on this App",
                         content = {
                             Button(
                                 onClick = showDeleteAll,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Delete All")
+                                Text("Delete All Activities")
                             }
                         }
                     )
@@ -287,6 +308,54 @@ fun DatePickerRow(
         }
         Button(onClick = onClick) {
             Text("Pick")
+        }
+    }
+}
+
+
+@Composable
+fun SyncActionsSection(
+    state: UiState,
+    onSyncAll: () -> Unit,
+    onCheckMatching: () -> Unit,
+    onFetch: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        // Show API limit warning banner if limit is reached
+        if (state.apiLimitReached) {
+            Text(
+                text = "API limit reached. Try again in ${state.apiLimitResetHint}",
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(8.dp)
+            )
+        }
+
+        // Your action buttons
+        Button(
+            onClick = onSyncAll,
+            enabled = !state.apiLimitReached,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Sync All")
+        }
+        Button(
+            onClick = onCheckMatching,
+            enabled = !state.apiLimitReached,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Check Matching")
+        }
+        Button(
+            onClick = onFetch,
+            enabled = !state.apiLimitReached,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Fetch Workouts")
         }
     }
 }

@@ -20,6 +20,8 @@ object StravaPrefs {
     const val KEY_REQUEST_TIMESTAMP_15M = "api_requests_15min_ts"
     private const val MASTER_KEY_ALIAS = MasterKey.DEFAULT_MASTER_KEY_ALIAS
     const val KEY_LAST_FETCH_EPOCH = "last_strava_fetch_epoch"
+    const val KEY_API_LIMIT_RESET = "api_limit_reset"
+
 
     fun getLastFetchEpoch(context: Context): Long =
         securePrefs(context).getLong(KEY_LAST_FETCH_EPOCH, 0L)
@@ -60,6 +62,12 @@ object StravaPrefs {
             remove(KEY_LAST_FETCH_EPOCH)
         }
     }
+
+    fun setApiLimitReset(context: Context, resetTime: Long) = securePrefs(context).edit {
+        putLong(KEY_API_LIMIT_RESET, resetTime)
+    }
+    fun getApiLimitReset(context: Context): Long =
+        securePrefs(context).getLong(KEY_API_LIMIT_RESET, 0)
 
     fun getApiRequestCountDay(context: Context): Int =
         securePrefs(context).getInt(KEY_REQUEST_COUNT_DAY, 0)

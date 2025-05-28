@@ -14,7 +14,9 @@ import androidx.work.WorkerParameters
 import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.fitbod.FitbodFetcher
 import com.example.fitbodstravasyncer.data.strava.StravaApiClient
+import com.example.fitbodstravasyncer.util.ApiRateLimitUtil
 import com.example.fitbodstravasyncer.util.NotificationHelper
+import com.example.fitbodstravasyncer.util.StravaPrefs
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,16 @@ class StravaAutoUploadWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        if (StravaPrefs.getApiLimitReset(applicationContext) > System.currentTimeMillis()) {
+            val hint = ApiRateLimitUtil.getApiResetTimeHint(applicationContext)
+            NotificationHelper.showNotification(
+                applicationContext,
+                "API Limit",
+                "Uploads paused. Try again in $hint.",
+                10001
+            )
+            return@withContext Result.retry()
+        }
         try {
             val context = applicationContext
             val dao = AppDatabase.getInstance(context).sessionDao()

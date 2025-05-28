@@ -211,7 +211,8 @@ fun MainScreen(
                             } else {
                                 lastActionToast = "Please wait 15 minutes between checks."
                             }
-                        },
+                        }
+                        ,
                         onToggleFutureSync = { viewModel.toggleFutureSync(it) },
                         onToggleDailySync = { viewModel.toggleDailySync(it) },
                         onSyncAll = {

@@ -8,6 +8,7 @@ import com.example.fitbodstravasyncer.data.db.AppDatabase
 import com.example.fitbodstravasyncer.data.strava.StravaApiClient
 import com.example.fitbodstravasyncer.data.strava.StravaUploadStatusResponse
 import com.example.fitbodstravasyncer.util.NotificationHelper
+import com.example.fitbodstravasyncer.util.StravaPrefs
 import com.example.fitbodstravasyncer.util.TcxFileGenerator
 import com.example.fitbodstravasyncer.util.isStravaConnected
 import kotlinx.coroutines.Dispatchers
@@ -183,15 +184,32 @@ class StravaUploadWorker(
             )
             Result.retry()
         } catch (e: HttpException) {
-        if (e.code() == 429) {
-            Log.e(TAG, "Strava API rate limit hit (429). Backing off.")
-            return@withContext Result.retry()
-        }
-        Log.e(TAG, "HTTP error: ${e.code()}", e)
-        Result.failure()
+            val code = e.code()
+            val errorBody = e.response()?.errorBody()?.string() ?: ""
+            val ctx = applicationContext
+            val msg = when (code) {
+                429 -> {
+                    // Set cool-off until the next 15-min window
+                    val now = System.currentTimeMillis()
+                    val min15Start = now / (15 * 60 * 1000)
+                    val next15Reset = ((min15Start + 1) * 15 * 60 * 1000)
+                    StravaPrefs.setApiLimitReset(ctx, next15Reset)
+                    "API rate limit hit. Try again in ${(next15Reset - now) / 60000}m."
+                }
+                400 -> "Upload failed: ${parseErrorMessage(errorBody) ?: "Bad file or data"}"
+                401 -> "Token invalid/expired. Please reconnect Strava."
+                else -> "Upload failed (${code}): ${parseErrorMessage(errorBody) ?: errorBody}"
+            }
+            NotificationHelper.showNotification(ctx, "Strava Sync Failed", msg, 2)
+            return@withContext if (code == 429) Result.retry() else Result.failure()
     } catch (e: Exception) {
         Result.retry()
     }
+
     }
 
+}
+private fun parseErrorMessage(errorBody: String): String? {
+    // Strava error bodies are often JSON like: {"message":"Some error","errors":[...]}
+    return Regex("\"message\"\\s*:\\s*\"([^\"]+)\"").find(errorBody)?.groupValues?.get(1)
 }
