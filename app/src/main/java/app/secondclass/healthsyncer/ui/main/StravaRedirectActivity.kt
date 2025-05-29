@@ -8,10 +8,16 @@ import app.secondclass.healthsyncer.data.strava.StravaAuthService
 import app.secondclass.healthsyncer.data.strava.StravaConstants.CLIENT_ID
 import app.secondclass.healthsyncer.data.strava.StravaConstants.CLIENT_SECRET
 import app.secondclass.healthsyncer.util.StravaPrefs
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class StravaRedirectActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var stravaAuthService: StravaAuthService
 
     private companion object {
         private const val SCHEME = "myapp"
@@ -30,8 +36,7 @@ class StravaRedirectActivity : ComponentActivity() {
         val prefs = StravaPrefs.securePrefs(this)
         lifecycleScope.launch {
             try {
-                val resp = StravaAuthService.Companion.create()
-                    .exchangeCode(CLIENT_ID, CLIENT_SECRET, code)
+                val resp = stravaAuthService.exchangeCode(CLIENT_ID, CLIENT_SECRET, code)
 
                 if (resp.accessToken.isNullOrBlank() || resp.refreshToken.isNullOrBlank() || resp.expiresAt == null) {
                     // Optionally show error UI here if you want

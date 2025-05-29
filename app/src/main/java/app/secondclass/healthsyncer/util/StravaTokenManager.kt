@@ -7,8 +7,13 @@ import app.secondclass.healthsyncer.data.strava.StravaAuthService
 import app.secondclass.healthsyncer.data.strava.StravaConstants.CLIENT_ID
 import app.secondclass.healthsyncer.data.strava.StravaConstants.CLIENT_SECRET
 import java.util.concurrent.CancellationException
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object StravaTokenManager {
+@Singleton
+class StravaTokenManager @Inject constructor(
+    private val stravaAuthService: StravaAuthService
+) {
     suspend fun getValidAccessToken(ctx: Context): String {
         val prefs   = StravaPrefs.securePrefs(ctx)
         var access  = prefs.getString(StravaPrefs.KEY_ACCESS, null)
@@ -23,8 +28,7 @@ object StravaTokenManager {
         if (access == null || now >= expires - 60) {
             check(!refresh.isNullOrBlank()) { "Missing refresh token" }
 
-            val resp = StravaAuthService.Companion.create()
-                .refreshToken(CLIENT_ID, CLIENT_SECRET, refresh)
+            val resp = stravaAuthService.refreshToken(CLIENT_ID, CLIENT_SECRET, refresh)
 
             access = resp.accessToken
             if (resp.accessToken.isNullOrBlank() || resp.refreshToken.isNullOrBlank() || resp.expiresAt == null) {
@@ -35,7 +39,7 @@ object StravaTokenManager {
                     putString(StravaPrefs.KEY_ACCESS, resp.accessToken)
                     putString(StravaPrefs.KEY_REFRESH, resp.refreshToken)
                     putLong(StravaPrefs.KEY_EXPIRES, resp.expiresAt)
-                } // <-- actually persists it
+                }
             }
         }
 

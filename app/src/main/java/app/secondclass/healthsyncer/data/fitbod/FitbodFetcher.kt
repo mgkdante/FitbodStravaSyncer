@@ -18,11 +18,12 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import javax.inject.Inject
 
-object FitbodFetcher {
-
+class FitbodFetcher @Inject constructor(
+    private val stravaApiClient: StravaApiClient
+) {
     suspend fun fetchFitbodSessionsWithStrava(
-        context: Context,
         healthClient: HealthConnectClient,
         startInstant: Instant,
         endInstant: Instant,
@@ -33,10 +34,7 @@ object FitbodFetcher {
     ): List<SessionEntity> {
         // Fetch Strava activities robustly (with error handling)
         val stravaActivities = safeStravaCall(
-            call = {
-                val client = StravaApiClient(context)
-                client.listAllActivities()
-            },
+            call = { stravaApiClient.listAllActivities() },
             onRateLimit = onRateLimit,
             onUnauthorized = onUnauthorized,
             onOtherError = onOtherError
@@ -65,7 +63,7 @@ object FitbodFetcher {
         val response = healthClient.readRecords(
             ReadRecordsRequest(
                 ExerciseSessionRecord::class,
-                TimeRangeFilter.Companion.between(startInstant, endInstant)
+                TimeRangeFilter.between(startInstant, endInstant)
             )
         )
 
@@ -77,21 +75,21 @@ object FitbodFetcher {
             val calories = healthClient.aggregate(
                 AggregateRequest(
                     setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
-                    TimeRangeFilter.Companion.between(record.startTime, record.endTime)
+                    TimeRangeFilter.between(record.startTime, record.endTime)
                 )
             )[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
 
             val heartRate = healthClient.aggregate(
                 AggregateRequest(
                     setOf(HeartRateRecord.BPM_AVG),
-                    TimeRangeFilter.Companion.between(record.startTime, record.endTime)
+                    TimeRangeFilter.between(record.startTime, record.endTime)
                 )
             )[HeartRateRecord.BPM_AVG]?.toDouble()
 
             val heartRateRecords = healthClient.readRecords(
                 ReadRecordsRequest(
                     HeartRateRecord::class,
-                    TimeRangeFilter.Companion.between(record.startTime, record.endTime)
+                    TimeRangeFilter.between(record.startTime, record.endTime)
                 )
             ).records
 

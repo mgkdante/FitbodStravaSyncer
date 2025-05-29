@@ -1,19 +1,24 @@
 package app.secondclass.healthsyncer.worker
 
 import android.content.Context
+import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import app.secondclass.healthsyncer.data.strava.restoreStravaIds
+import app.secondclass.healthsyncer.data.strava.StravaSyncHelper
 import app.secondclass.healthsyncer.util.NotificationHelper
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 
-class StravaDailySyncWorker(
-    ctx: Context,
-    params: WorkerParameters
-) : CoroutineWorker(ctx, params) {
+@HiltWorker
+class StravaDailySyncWorker @AssistedInject constructor(
+    @Assisted ctx: Context,
+    @Assisted params: WorkerParameters,
+    private val stravaSyncHelper: StravaSyncHelper,
+    ) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
         return try {
             val openAppIntent = NotificationHelper.createOpenAppIntent(applicationContext)
-            restoreStravaIds(applicationContext)
+            stravaSyncHelper.restoreStravaIds()
             // Notify the user when the daily sync is done
             NotificationHelper.showNotification(
                 applicationContext,

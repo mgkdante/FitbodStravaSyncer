@@ -3,6 +3,7 @@ package app.secondclass.healthsyncer.worker
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import app.secondclass.healthsyncer.data.db.AppDatabase
 import app.secondclass.healthsyncer.data.strava.StravaApiClient
@@ -12,6 +13,8 @@ import app.secondclass.healthsyncer.util.NotificationHelper
 import app.secondclass.healthsyncer.util.StravaPrefs
 import app.secondclass.healthsyncer.util.TcxFileGenerator
 import app.secondclass.healthsyncer.util.isStravaConnected
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
@@ -27,9 +30,12 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
-class StravaUploadWorker(
-    ctx: Context,
-    params: WorkerParameters
+@HiltWorker
+class StravaUploadWorker @AssistedInject constructor(
+    @Assisted ctx: Context,
+    @Assisted params: WorkerParameters,
+    private val stravaApiClient: StravaApiClient,
+    private val appDatabase: AppDatabase
 ) : CoroutineWorker(ctx, params) {
 
     private val ctx = applicationContext
@@ -74,7 +80,6 @@ class StravaUploadWorker(
         }
 
         var tcxFile: File? = null
-        val client = StravaApiClient(ctx)
         try {
             val sessionId = inputData.getString("SESSION_ID")?.takeIf { it.isNotBlank() }
                 ?: run {
@@ -82,7 +87,7 @@ class StravaUploadWorker(
                     return@withContext Result.failure()
                 }
 
-            val dao     = AppDatabase.getInstance(ctx).sessionDao()
+            val dao     = appDatabase.sessionDao()
             val session = dao.getById(sessionId) ?: run {
                 Log.e(TAG, "doWork: session not found for id=$sessionId")
                 return@withContext Result.failure()
@@ -110,7 +115,7 @@ class StravaUploadWorker(
             }
 
             // --- DRY remote-check via StravaApiClient ---
-            val recentActivities = client.listAllActivities(perPage = PER_PAGE)
+            val recentActivities = stravaApiClient.listAllActivities(perPage = PER_PAGE)
             val formatter        = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC)
             val sessionEpoch     = session.startTime.epochSecond
             val tolerance        = 300L // 5 min
@@ -148,7 +153,7 @@ class StravaUploadWorker(
             )
 
             // --- DRY upload through StravaApiClient (NO manual token) ---
-            val response = client.uploadActivity(
+            val response = stravaApiClient.uploadActivity(
                 MultipartBody.Part.createFormData("file", "${session.id}.tcx", tcxFile.asRequestBody("application/xml".toMediaType())),
                 "tcx".toRequestBody(),
                 "WeightTraining".toRequestBody(),
@@ -164,7 +169,7 @@ class StravaUploadWorker(
 
             do {
                 delay(delayMs)
-                status = client.getUploadStatus(response.id)
+                status = stravaApiClient.getUploadStatus(response.id)
                 delayMs = (delayMs * 2).coerceAtMost(60_000L)
                 checks++
             } while (status.activity_id == null && checks < maxChecks)

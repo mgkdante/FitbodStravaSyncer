@@ -1,22 +1,25 @@
 package app.secondclass.healthsyncer.data.strava
 
 import android.content.Context
-import app.secondclass.healthsyncer.core.network.RetrofitProvider
 import app.secondclass.healthsyncer.data.strava.StravaConstants.PER_PAGE
 import app.secondclass.healthsyncer.util.StravaPrefs
 import app.secondclass.healthsyncer.util.StravaTokenManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class StravaApiClient(private val context: Context) {
-    // ← unified API client via RetrofitProvider
-    private val api: StravaActivityService by lazy {
-        RetrofitProvider.createApiService(StravaActivityService::class.java)
-    }
+@Singleton
+class StravaApiClient @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val api: StravaActivityService,
+    private val stravaTokenManager: StravaTokenManager
+) {
 
     /** Returns “Bearer <token>”, refreshing as needed. */
     private suspend fun getAuthToken(): String =
-        "Bearer ${StravaTokenManager.getValidAccessToken(context)}"
+        "Bearer ${stravaTokenManager.getValidAccessToken(context)}"
 
     /**
      * Combines all pages into a single list.
@@ -51,10 +54,6 @@ class StravaApiClient(private val context: Context) {
         return all
     }
 
-    /**
-     * Helper: one page only.
-     */
-
     /** Upload a single file (TCX, GPX, etc). */
     suspend fun uploadActivity(
         filePart: MultipartBody.Part,
@@ -83,5 +82,4 @@ class StravaApiClient(private val context: Context) {
         val token = getAuthToken()
         return api.getUploadStatus(token, uploadId)
     }
-
 }

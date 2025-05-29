@@ -1,6 +1,5 @@
 package app.secondclass.healthsyncer.data.strava
 
-import app.secondclass.healthsyncer.core.network.RetrofitProvider
 import com.squareup.moshi.Json
 import retrofit2.http.*
 
@@ -29,9 +28,4 @@ interface StravaAuthService {
         @Field("refresh_token") refreshToken: String,
         @Field("grant_type")    grantType: String = "refresh_token"
     ): TokenResponse
-
-    companion object {
-        fun create(): StravaAuthService =
-            RetrofitProvider.createAuthService(StravaAuthService::class.java)
-    }
 }

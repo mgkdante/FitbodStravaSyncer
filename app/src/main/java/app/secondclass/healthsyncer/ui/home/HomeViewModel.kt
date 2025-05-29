@@ -14,6 +14,7 @@ import app.secondclass.healthsyncer.data.db.SessionRepository
 import app.secondclass.healthsyncer.data.fitbod.FitbodFetcher
 import app.secondclass.healthsyncer.data.strava.StravaApiClient
 import app.secondclass.healthsyncer.data.strava.StravaAuthService
+import app.secondclass.healthsyncer.data.strava.StravaSyncHelper
 import app.secondclass.healthsyncer.util.ApiRateLimitUtil
 import app.secondclass.healthsyncer.util.NotificationHelper
 import app.secondclass.healthsyncer.util.SessionMatcher
@@ -24,19 +25,30 @@ import app.secondclass.healthsyncer.util.safeStravaCall
 import app.secondclass.healthsyncer.worker.DailySyncScheduler
 import app.secondclass.healthsyncer.worker.StravaAutoUploadWorker
 import app.secondclass.healthsyncer.worker.StravaUploadWorker
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
+import javax.inject.Inject
 
 private const val KEY_FUTURE = "future_auto_sync"
 private const val KEY_DAILY = "daily_sync_enabled"
 private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
 
-class HomeViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo = SessionRepository(AppDatabase.getInstance(application).sessionDao())
+@HiltViewModel
+class HomeViewModel @Inject constructor(
+    application: Application,
+    private val repo: SessionRepository,
+    private val stravaApiClient: StravaApiClient,
+    private val stravaSyncHelper: StravaSyncHelper,
+    private val fitbodFetcher: FitbodFetcher,
+    private val appDatabase: AppDatabase,
+    private val stravaAuthService: StravaAuthService // <-- DI provided!
+) : AndroidViewModel(application) {
+
     private val prefs = StravaPrefs.securePrefs(application)
     private var lastCheckMatching = 0L
 
@@ -68,7 +80,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _sessionsUiState = MutableStateFlow<SessionsUiState>(SessionsUiState.Loading)
     val sessionsUiState: StateFlow<SessionsUiState> = _sessionsUiState
 
-    // --- THIS IS THE NEW STATE FOR NAVIGATION LOGIC ---
     private val _hasLocalSessions = MutableStateFlow(false)
     val hasLocalSessions: StateFlow<Boolean> = _hasLocalSessions
 
@@ -83,7 +94,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadSessions() = viewModelScope.launch {
         try {
             repo.allSessions().collect { list ->
-                // --- Update local session existence for navigation logic ---
                 _hasLocalSessions.value = list.isNotEmpty()
                 _sessionsUiState.value = when {
                     list.isEmpty() -> SessionsUiState.Empty
@@ -242,8 +252,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val end = to.atStartOfDay(ZoneId.systemDefault()).plusDays(1).toInstant()
             val healthClient = HealthConnectClient.getOrCreate(getApplication())
 
-            val sessions = FitbodFetcher.fetchFitbodSessionsWithStrava(
-                context = getApplication(),
+            val sessions = fitbodFetcher.fetchFitbodSessionsWithStrava(
                 healthClient = healthClient,
                 startInstant = start,
                 endInstant = end,
@@ -275,7 +284,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun restoreStravaIds() = viewModelScope.launch {
         try {
-            app.secondclass.healthsyncer.data.strava.restoreStravaIds(
+            stravaSyncHelper.restoreStravaIds(
                 getApplication(),
                 onRateLimit = { isAppLimit ->
                     Toast.makeText(getApplication(), if (isAppLimit)
@@ -299,11 +308,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun unsyncIfStravaDeleted() = viewModelScope.launch {
         try {
-            val client = StravaApiClient(getApplication())
-            val dao = AppDatabase.getInstance(getApplication()).sessionDao()
-
+            val dao = appDatabase.sessionDao()
             val stravaActivityIds = safeStravaCall(
-                call = { client.listAllActivities().mapNotNull { it.id } },
+                call = { stravaApiClient.listAllActivities().mapNotNull { it.id } },
                 onRateLimit = { isAppLimit ->
                     Toast.makeText(getApplication(), if (isAppLimit)
                         "App-wide Strava rate limit hit. Try again later."
@@ -344,9 +351,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return@launch
         }
 
-        val client = StravaApiClient(getApplication())
         val recentActivities = safeStravaCall(
-            call = { client.listAllActivities() },
+            call = { stravaApiClient.listAllActivities() },
             onRateLimit = { isAppLimit ->
                 Toast.makeText(getApplication(), if (isAppLimit)
                     "App-wide Strava rate limit hit. Try again later."
@@ -370,7 +376,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     SessionMatcher.matchesSessionByTime(sessionStartEpoch, activity, tolerance)
                 }
                 if (matching != null) {
-                    AppDatabase.getInstance(getApplication()).sessionDao()
+                    appDatabase.sessionDao()
                         .updateStravaId(session.id, matching.id)
                 } else {
                     StravaUploadWorker.enqueue(getApplication(), session.id)
@@ -390,8 +396,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun exchangeStravaCodeForTokenInViewModel(code: String) {
-        val resp = StravaAuthService.create()
-            .exchangeCode(BuildConfig.STRAVA_CLIENT_ID, BuildConfig.STRAVA_CLIENT_SECRET, code)
+        val resp = stravaAuthService.exchangeCode(
+            BuildConfig.STRAVA_CLIENT_ID,
+            BuildConfig.STRAVA_CLIENT_SECRET,
+            code
+        )
         StravaPrefs.securePrefs(getApplication()).edit(commit = true) {
             putString(StravaPrefs.KEY_ACCESS, resp.accessToken)
             putString(StravaPrefs.KEY_REFRESH, resp.refreshToken)

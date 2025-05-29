@@ -3,20 +3,26 @@ package app.secondclass.healthsyncer.worker
 import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import app.secondclass.healthsyncer.data.db.AppDatabase
 import app.secondclass.healthsyncer.data.fitbod.FitbodFetcher
 import app.secondclass.healthsyncer.util.ApiRateLimitUtil
 import app.secondclass.healthsyncer.util.NotificationHelper
 import app.secondclass.healthsyncer.util.StravaPrefs
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class StravaAutoUploadWorker(
-    ctx: Context,
-    params: WorkerParameters
+@HiltWorker
+class StravaAutoUploadWorker @AssistedInject constructor(
+    @Assisted ctx: Context,
+    @Assisted params: WorkerParameters,
+    private val fitbodFetcher: FitbodFetcher,
+    private val appDatabase: AppDatabase
 ) : CoroutineWorker(ctx, params) {
 
     companion object {
@@ -73,14 +79,13 @@ class StravaAutoUploadWorker(
 
         try {
             val context = applicationContext
-            val dao = AppDatabase.getInstance(context).sessionDao()
+            val dao = appDatabase.sessionDao()
             val healthClient = HealthConnectClient.getOrCreate(context)
             val nowInstant = Instant.now()
             val startInstant = nowInstant.minusSeconds(24 * 3600)
 
             // DRY: Fetch and match sessions with Strava in one call
-            val matchedSessions = FitbodFetcher.fetchFitbodSessionsWithStrava(
-                context = context,
+            val matchedSessions = fitbodFetcher.fetchFitbodSessionsWithStrava(
                 healthClient = healthClient,
                 startInstant = startInstant,
                 endInstant = nowInstant,

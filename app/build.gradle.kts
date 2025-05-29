@@ -1,12 +1,11 @@
 import java.util.Properties
 
-val material3Version = "1.4.0-alpha15"
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
+    id("com.google.dagger.hilt.android") version "2.56.2"
 }
 
 val props = Properties().apply {
@@ -66,10 +65,6 @@ android {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        // align with your Compose Compiler
-        kotlinCompilerExtensionVersion = "1.4.6"
-    }
 }
 
 dependencies {
@@ -115,7 +110,7 @@ dependencies {
 
     implementation(libs.androidx.material3)
     // Window-size classes for responsive layouts
-    implementation("androidx.compose.material3:material3-window-size-class:$material3Version")
+    implementation(libs.androidx.material3.window.size.class1)
     // Adaptive navigation suite for larger screens (e.g. multi-pane)
     implementation(libs.androidx.material3.adaptive.navigation.suite)
     implementation(libs.androidx.material.icons.extended)
@@ -126,8 +121,13 @@ dependencies {
 
     implementation(libs.androidx.navigation.compose)
 
+    implementation(libs.javapoet.v1130)
+    implementation(libs.dagger.hilt.android)
+    ksp(libs.hilt.compiler)
 
-
+    implementation(libs.androidx.hilt.navigation.compose)
+    ksp(libs.androidx.hilt.compiler)
+    implementation(libs.androidx.hilt.work)
 }
 
 

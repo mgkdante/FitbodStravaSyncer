@@ -14,7 +14,10 @@ import kotlinx.coroutines.launch
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewModelScope
 import app.secondclass.healthsyncer.ui.home.HomeViewModel
+import dagger.hilt.android.AndroidEntryPoint
 
+
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val viewModel: HomeViewModel by viewModels()
     private lateinit var healthConnectClient: HealthConnectClient
