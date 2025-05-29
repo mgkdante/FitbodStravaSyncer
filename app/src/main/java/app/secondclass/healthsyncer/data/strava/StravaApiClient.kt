@@ -33,8 +33,8 @@ class StravaApiClient(private val context: Context) {
         var page = 1
         while (true) {
             val batch = api.listActivities(token, perPage, page, after, before)
-            StravaPrefs.incrementUserApiRequest(context, isRead = true)
             if (batch.isEmpty()) break
+            StravaPrefs.incrementUserApiRequest(context, isRead = true)
             all += batch
             page++
         }
