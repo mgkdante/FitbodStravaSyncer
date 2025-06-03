@@ -9,6 +9,7 @@ import app.secondclass.healthsyncer.data.fitbod.FitbodFetcher
 import app.secondclass.healthsyncer.util.ApiRateLimitUtil
 import app.secondclass.healthsyncer.util.NotificationHelper
 import app.secondclass.healthsyncer.util.StravaPrefs
+import app.secondclass.healthsyncer.util.hasRequiredHealthPermissions
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,19 @@ class StravaAutoUploadWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        if (!hasRequiredHealthPermissions(applicationContext)) {
+            val openAppIntent = NotificationHelper.createOpenAppIntent(applicationContext)
+            NotificationHelper.showNotification(
+                applicationContext,
+                "Permissions Needed",
+                "Auto-sync failed: Please grant all Health Connect permissions (including background & from other apps).",
+                10300,
+                openAppIntent
+            )
+            return@withContext Result.failure()
+        }
+
+
         val openAppIntent = NotificationHelper.createOpenAppIntent(applicationContext)
 
         if (StravaPrefs.isUserApiLimitNear(applicationContext)) {

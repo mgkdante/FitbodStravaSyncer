@@ -1,5 +1,7 @@
 // MainActivityContent.kt
 
+import android.os.Build
+import androidx.annotation.RequiresExtension
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
@@ -21,7 +23,9 @@ import app.secondclass.healthsyncer.ui.settings.SettingsScreen
 import app.secondclass.healthsyncer.ui.util.OnResumeEffect
 import app.secondclass.healthsyncer.ui.util.PermissionAndAuthEffects
 import app.secondclass.healthsyncer.ui.util.rememberPermissionLauncher
+import app.secondclass.healthsyncer.util.HEALTH_PERMISSIONS
 
+@RequiresExtension(extension = Build.VERSION_CODES.UPSIDE_DOWN_CAKE, version = 13)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainActivityContent(
@@ -42,20 +46,7 @@ fun MainActivityContent(
         AppThemeMode.DARK -> true
     }
 
-    val permissions = remember {
-        setOf(
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(
-                androidx.health.connect.client.records.ExerciseSessionRecord::class
-            ),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(
-                androidx.health.connect.client.records.ActiveCaloriesBurnedRecord::class
-            ),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(
-                androidx.health.connect.client.records.HeartRateRecord::class
-            ),
-            androidx.health.connect.client.permission.HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
-        )
-    }
+    val permissions = remember { HEALTH_PERMISSIONS }
     var permissionsChecked by remember { mutableStateOf(false) }
     var hasHealthPermissions by remember { mutableStateOf(false) }
 
